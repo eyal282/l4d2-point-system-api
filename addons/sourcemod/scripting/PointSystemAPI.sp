@@ -7,53 +7,44 @@
 #include <sdktools>
 #include <sdkhooks>
 #include <left4dhooks>
+#include <ps_api>
 
 #pragma newdecls required
 #define PLUGIN_TITLE	"Point System API"
 
-char g_sBossClasses[][]={"","smoker","boomer","hunter","spitter","jockey","charger","witch","tank","survivor"};
+//char g_sBossClasses[][]={"","smoker","boomer","hunter","spitter","jockey","charger","witch","tank","survivor"};
 char g_sBossNames[][]={"","Smoker","Boomer","Hunter","Spitter","Jockey","Charger","Witch","Tank","Survivor"};
 
 
 enum struct enCategory
 {
+	char sID[64]; // Identifier between plugins, players cannot see this.
 	char sName[64]; // Category Name
-	bool bBuyAsAlive; // Accessible to living players?
-	bool bBuyAsDead; // Accessible to dead players?
-	bool bBuyAsInfected; // Accessible to infected?
-	bool bBuyAsSurvivor; // Accessible to survivors?
-	bool bBuyAsPinned; // Accessible to pinned survivors?
+	int iBuyFlags; // Must use variable that determines flags that specify when you can buy. BUYFLAG_* in ps_api.inc
 	char sNoInfectedList[16]; // Merged numbers of infected that cannot buy this.
 }
 
 enum struct enProduct
 {
-	int iCategory; // Category number this product belongs to.
+	int iCategory; // Category number this product belongs to, or -1 for main buy menu.
 	int iCost; // Cost of this product.
+	int iBuyFlags; // Must use variable that determines flags that specify when you can buy. BUYFLAG_* in ps_api.inc
 	char sName[64]; // Product Name
+	char sDescription[128]; // Optional Description
 	char sAliases[256]; // Alises, seperated by spaces, to buy directly with !buy <alias>
-	char sNoInfectedList[32]; // Merged numbers of infected that cannot buy this.
+	char sInfo[64]; // Info that only devs can see.
+	char sNoInfectedList[16]; // Merged numbers of infected that cannot buy this.
 	float fDelay; // Delay between purchase to obtaining the product.
 	float fCooldown; // Cooldown between purchases.
-	bool bBuyAsAlive; // Accessible to living players?
-	bool bBuyAsDead; // Accessible to dead players?
-	bool bBuyAsInfected; // Accessible to infected?
-	bool bBuyAsSurvivor; // Accessible to survivors?
-	bool bBuyAsPinned; // Accessible to pinned survivors?
-	bool bBuyForTeam; // Can be bought for teammates?
-	bool bBuyForHumanTeam; // Can be bought for non-bot teammates?
 	
 	float NextBuyProduct[MAXPLAYERS + 1]; // Next time each player can buy this product.
 }
 
 ArrayList g_aCategories, g_aProducts;
 
-GlobalForward g_fwOnBuyProduct; // Calculated before the delay.
+GlobalForward g_fwOnTryBuyProduct; // Calculated before the delay.
 GlobalForward g_fwOnBuyProductPost; // Calculated after the delay.
 GlobalForward g_fwOnShouldGiveProduct; // We should now give the product to the user, because the delay has passed and not refunded.
-
-
-bool PrecachedCommons = false;
 
 int MultipleDamageStack[MAXPLAYERS+1], SpitterDamageStack[MAXPLAYERS+1];
 float NextMultipleDamage[MAXPLAYERS + 1], NextSpitterDamage[MAXPLAYERS + 1];
@@ -63,10 +54,10 @@ int SavedSurvivorPoints[MAXPLAYERS+1], SavedInfectedPoints[MAXPLAYERS+1];
 float version = 1.0;
 
 char MapName[30];
-int boughtcost[MAXPLAYERS+1] = { 0, ... };
+//int boughtcost[MAXPLAYERS+1] = { 0, ... };
 int hurtcount[MAXPLAYERS+1] = { 0, ... };
 int protectcount[MAXPLAYERS+1] = { 0, ... };
-int cost[MAXPLAYERS+1] = { 0, ... };
+//int cost[MAXPLAYERS+1] = { 0, ... };
 int tankburning[MAXPLAYERS+1] = { 0, ... };
 int tankbiled[MAXPLAYERS+1] = { 0, ... };
 int witchburning[MAXPLAYERS+1] = { 0, ... };
@@ -74,14 +65,6 @@ int points[MAXPLAYERS+1] = { 0, ... };
 int killcount[MAXPLAYERS+1] = { 0, ... };
 int headshotcount[MAXPLAYERS+1] = { 0, ... };
 int wassmoker[MAXPLAYERS+1] = { 0, ... };
-int tankHealLimit[MAXPLAYERS+1] = { 0, ... };
-int tanksspawned = 0;
-int witchsspawned = 0;
-int ucommonleft = 0;
-int jimmiesleft = 0;
-int jimmiesalive = 0;
-int witchesalive = 0;
-int witchestoqueue = 0;
 //Definitions to save space
 #define ATTACKER int attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
 #define CLIENT int client = GetClientOfUserId(GetEventInt(event, "userid"));
@@ -95,6 +78,7 @@ Handle Enable = INVALID_HANDLE;
 Handle Modes = INVALID_HANDLE;
 Handle Notifications = INVALID_HANDLE;
 //Item buyables
+/*
 Handle PointsPistol = INVALID_HANDLE;
 Handle PointsMagnum = INVALID_HANDLE;
 Handle PointsSMG = INVALID_HANDLE;
@@ -146,6 +130,7 @@ Handle PointsIAmmoPack = INVALID_HANDLE;
 Handle PointsLSight = INVALID_HANDLE;
 Handle PointsRefill = INVALID_HANDLE;
 Handle PointsHeal = INVALID_HANDLE;
+*/
 //Survivor point earning things
 Handle SValueKillingSpree = INVALID_HANDLE;
 Handle SNumberKill = INVALID_HANDLE;
@@ -176,7 +161,7 @@ Handle IIncap = INVALID_HANDLE;
 Handle IHurt = INVALID_HANDLE;
 Handle IKill = INVALID_HANDLE;
 //Infected buyables
-Handle PointsSuicide = INVALID_HANDLE;
+/*Handle PointsSuicide = INVALID_HANDLE;
 Handle PointsHunter = INVALID_HANDLE;
 Handle PointsJockey = INVALID_HANDLE;
 Handle PointsSmoker = INVALID_HANDLE;
@@ -204,15 +189,17 @@ Handle CatThrowables = INVALID_HANDLE;
 Handle CatMisc = INVALID_HANDLE;
 Handle CatMelee = INVALID_HANDLE;
 Handle CatWeapons = INVALID_HANDLE;
+
 //Misc
 Handle TankLimit = INVALID_HANDLE;
 Handle WitchLimit = INVALID_HANDLE;
+*/
 Handle ResetPoints = INVALID_HANDLE;
 Handle StartPoints = INVALID_HANDLE;
 //new Handle:ChangeTeam = INVALID_HANDLE;
-Handle BuyTankHealLimit = INVALID_HANDLE;
-Handle HelpTimer = INVALID_HANDLE;
-Handle HelpDelay = INVALID_HANDLE;
+//Handle BuyTankHealLimit = INVALID_HANDLE;
+//Handle HelpTimer = INVALID_HANDLE;
+//Handle HelpDelay = INVALID_HANDLE;
 Handle PisserTimer = INVALID_HANDLE;
 Handle WitchPisser = INVALID_HANDLE;
 
@@ -233,21 +220,11 @@ public void OnPluginStart()
 	g_aCategories = new ArrayList(sizeof(enCategory));
 	g_aProducts = new ArrayList(sizeof(enProduct));
 	
-	// sAliases contain the original alias list, to compare your own alias as an identifier.
-	// Return Plugin_Handled to block purchase.
-	// public Action PointSystemAPI_OnBuyProduct(int buyer, const char[] sAliases, const char[] sName, int &target, int &iCost, &float fDelay, &float fCooldown)
-	g_fwOnBuyProduct = CreateGlobalForward("PointSystemAPI_OnBuyProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_CellByRef, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
+	g_fwOnTryBuyProduct = CreateGlobalForward("PointSystemAPI_OnTryBuyProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_CellByRef, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
 	
-	// If a delay exists, called several seconds after PointSystemAPI_OnBuyProduct. Otherwise this is called instantly. 
-	// sAliases contain the original alias list, to compare your own alias as an identifier.
-	// Return Plugin_Handled to refund.
-	// public Action PointSystemAPI_OnBuyProductPost(int buyer, const char[] sAliases, const char sName[], int target, int iCost, float fDelay, float fCooldown)
-	g_fwOnBuyProductPost = CreateGlobalForward("PointSystemAPI_OnBuyProductPost", ET_Event, Param_Cell, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
+	g_fwOnBuyProductPost = CreateGlobalForward("PointSystemAPI_OnBuyProductPost", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
 	
-	// This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
-	// sAliases contain the original alias list, to compare your own alias as an identifier.
-	// public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sAliases, const char sName[], int target, int iCost, float fDelay, float fCooldown)
-	g_fwOnShouldGiveProduct = CreateGlobalForward("PointSystemAPI_OnBuyProductPost", ET_Ignore, Param_Cell, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
+	g_fwOnShouldGiveProduct = CreateGlobalForward("PointSystemAPI_OnShouldGiveProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
 	
 	char game_name[128];
 	GetGameFolderName(game_name, sizeof(game_name));
@@ -260,7 +237,34 @@ public void OnPluginStart()
 	Notifications = CreateConVar("l4d2_points_notify", "1", "Show messages when points are earned?");
 	Enable = CreateConVar("l4d2_points_enable", "1", "Enable Point System?");
 	Modes = CreateConVar("l4d2_points_modes", "coop,realism,versus,teamversus", "Which game modes to use Point System");
-	
+	ResetPoints = CreateConVar("l4d2_points_reset_mapchange", "versus,teamversus", "Which game modes to reset point count on round end and round start");
+	SValueKillingSpree = CreateConVar("l4d2_points_cikill_value", "2", "How many points does killing a certain amount of infected earn");
+	SNumberKill = CreateConVar("l4d2_points_cikills", "25", "How many kills you need to earn a killing spree bounty");
+	SValueHeadSpree = CreateConVar("l4d2_points_headshots_value", "4", "How many points does killing a certain amount of infected with headshots earn");
+	SNumberHead = CreateConVar("l4d2_points_headshots", "20", "How many kills you need to earn a killing spree bounty");
+	SSIKill = CreateConVar("l4d2_points_sikill", "1", "How many points does killing a special infected earn");
+	STankKill = CreateConVar("l4d2_points_tankkill", "2", "How many points does killing a tank earn");
+	SWitchKill = CreateConVar("l4d2_points_witchkill", "4", "How many points does killing a witch earn");
+	SWitchCrown = CreateConVar("l4d2_points_witchcrown", "2", "How many points does crowning a witch earn");
+	SHeal = CreateConVar("l4d2_points_heal", "5", "How many points does healing a team mate earn");
+	SProtect = CreateConVar("l4d2_points_protect", "1", "How many points does protecting a team mate earn");
+	SHealWarning = CreateConVar("l4d2_points_heal_warning", "1", "How many points does healing a team mate who did not need healing earn");
+	SRevive = CreateConVar("l4d2_points_revive", "3", "How many points does reviving a team mate earn");
+	SLedge = CreateConVar("l4d2_points_ledge", "1", "How many points does reviving a hanging team mate earn");
+	SDefib = CreateConVar("l4d2_points_defib_action", "5", "How many points does defibbing a team mate earn");
+	STBurn = CreateConVar("l4d2_points_tankburn", "2", "How many points does burning a tank earn");
+	STSolo = CreateConVar("l4d2_points_tanksolo", "8", "How many points does killing a tank single-handedly earn");
+	SWBurn = CreateConVar("l4d2_points_witchburn", "1", "How many points does burning a witch earn");
+	STag = CreateConVar("l4d2_points_bile_tank", "2", "How many points does biling a tank earn");
+	IChoke = CreateConVar("l4d2_points_smoke", "2", "How many points does smoking a survivor earn");
+	IPounce = CreateConVar("l4d2_points_pounce", "1", "How many points does pouncing a survivor earn");
+	ICarry = CreateConVar("l4d2_points_charge", "2", "How many points does charging a survivor earn");
+	IImpact = CreateConVar("l4d2_points_impact", "1", "How many points does impacting a survivor earn");
+	IRide = CreateConVar("l4d2_points_ride", "2", "How many points does riding a survivor earn");
+	ITag = CreateConVar("l4d2_points_boom", "1", "How many points does booming a survivor earn");
+	IIncap = CreateConVar("l4d2_points_incap", "3", "How many points does incapping a survivor earn");
+	IHurt = CreateConVar("l4d2_points_damage", "2", "How many points does doing damage earn");
+	IKill = CreateConVar("l4d2_points_kill", "5", "How many points does killing a survivor earn");
 	
 	RegConsoleCmd("sm_buystuff", BuyMenu);
 	RegConsoleCmd("sm_buy", BuyMenu);
@@ -301,7 +305,6 @@ public void OnPluginStart()
 	HookEvent ("player_team", Event_ChangeTeam, EventHookMode_Pre);
 	HookEvent("player_left_start_area", Event_PlayerLeftStartArea, EventHookMode_Post);
 	//AutoExecConfig(true, "l4d2_points_system");
-
 }
 
 // Global Forward
@@ -362,7 +365,6 @@ public void OnMapStart()
 	PrecacheModel("models/infected/common_male_jimmy.mdl", true);
 	GetCurrentMap(MapName, sizeof(MapName));
 	g_bIsAreaStart = false;
-	PrecachedCommons = true;
 	PisserTimer = INVALID_HANDLE;
 }	
 
@@ -370,14 +372,10 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	WipeAllInfected();
-	PrecachedCommons = false;
 }	
 
 void WipeAllInfected()
 {
-	
-	jimmiesleft = 0;
-	
 	int MaxEntities = GetEntityCount();
 
 	
@@ -392,16 +390,6 @@ void WipeAllInfected()
 		if(StrEqual(Classname, "infected", true))
 			AcceptEntityInput(i, "Kill");
 	}
-}
-
-public void OnConfigsExecuted()
-{
-	if(HelpTimer != INVALID_HANDLE)
-	{
-		CloseHandle(HelpTimer);
-		HelpTimer = INVALID_HANDLE;
-	}
-	HelpTimer = CreateTimer(GetConVarFloat(HelpDelay), HelpMessage, _, TIMER_REPEAT);
 }
 
 
@@ -443,98 +431,96 @@ public Action Event_VSRStart(Handle event, char[] event_name, bool dontBroadcast
 		else if(IsTeamInfected(i))
 			PrintHintText(i, "Recommended products to buy for infected:\n!buy horde | !buy witch | !buy charger | !buy tank");
 	}
+	
+	return Plugin_Continue;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	CreateNative("PS_CreateCategory", PS_CreateCategory);
-	CreateNative("PS_CreateItem", PS_CreateItem);
-	CreateNative("PS_GetVersion", PS_GetVersion);
-	CreateNative("PS_SetPoints", PS_SetPoints);
-	CreateNative("PS_HardSetPoints", PS_HardSetPoints);
-	CreateNative("PS_GetPoints", PS_GetPoints);
-	CreateNative("PS_GetTankHealCount", PS_GetTankHealCount);
-	CreateNative("PS_AddTankHealCount", PS_AddTankHealCount);
-	CreateNative("PS_CalculateGhostCost", PS_CalculateGhostCost);
-	CreateNative("PS_FullHeal", PS_FullHeal);
+	CreateNative("PS_CreateCategory", Native_CreateCategory);
+	CreateNative("PS_CreateProduct", Native_CreateProduct);
+	CreateNative("PS_GetVersion", Native_GetVersion);
+	CreateNative("PS_SetPoints", Native_SetPoints);
+	CreateNative("PS_HardSetPoints", Native_HardSetPoints);
+	CreateNative("PS_GetPoints", Native_GetPoints);
+	CreateNative("PS_FullHeal", Native_FullHeal);
 
-	RegPluginLibrary("ps_natives");
+	RegPluginLibrary("PointSystemAPI");
 	return APLRes_Success;
 }
 
-public int PS_CreateCategory(Handle plugin, int numParams)
+public any Native_CreateCategory(Handle plugin, int numParams)
 {
-
+	return true;
 }
 
-public int PS_CreateItem(Handle plugin, int numParams)
+public any Native_CreateProduct(Handle plugin, int numParams)
 {
-
-}
-public bool S_RoundIsStarted(Handle plugin, int numParams)
-{
-	return g_bIsAreaStart;
-}
-
-
-public int PS_CalculateGhostCost(Handle plugin, int numParams)
-{
-	return CalculateGhostCost();
-}
-
-public int PS_FullHeal(Handle plugin, int numParams)
-{
-	int client = GetNativeCell(1);
-	ExecuteFullHeal(client);
-}
-
-public int PS_AddTankHealCount(Handle plugin, int numParams)
-{
-	int client = GetNativeCell(1);
-	tankHealLimit[client] += 1;
-}
-
-public int PS_GetTankHealCount(Handle plugin, int numParams)
-{
-	int client = GetNativeCell(1);
-	return tankHealLimit[client];
+	enProduct product;
+	
+	product.iCategory = GetNativeCell(1);
+	product.iCost = GetNativeCell(2);
+	
+	
+	GetNativeString(3, product.sName, sizeof(enProduct::sName));
+	GetNativeString(4, product.sDescription, sizeof(enProduct::sDescription));
+	GetNativeString(5, product.sAliases, sizeof(enProduct::sAliases));
+	GetNativeString(6, product.sInfo, sizeof(enProduct::sInfo));
+	GetNativeString(7, product.sNoInfectedList, sizeof(enProduct::sNoInfectedList));
+	
+	product.fDelay = GetNativeCell(8);
+	product.fCooldown = GetNativeCell(9);
+	
+	product.iBuyFlags = GetNativeCell(10);
+	
+	DeleteProductsByAliases(product.sAliases);
+	
+	PushArrayArray(g_aProducts, product);
+	
+	return true;
+	
 }
 
-public int PS_PrintToChat(Handle plugin, int numParams)
-{
-	int client = GetNativeCell(1);
-	char ChatMsg[256];
-	GetNativeString(2, ChatMsg, sizeof(ChatMsg));
-	PrintToChat(client, "\x04[PS]: \x03%s", ChatMsg );
-}
-
-public any PS_GetVersion(Handle plugin, int numParams)
+public any Native_GetVersion(Handle plugin, int numParams)
 {
 	return version;
 }
 
-public int PS_SetPoints(Handle plugin, int numParams)
+public int Native_SetPoints(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
 	int newval = GetNativeCell(2);
 	points[client] = newval;
+	
+	return true;
 }
 
-public int PS_HardSetPoints(Handle plugin, int numParams)
+public int Native_HardSetPoints(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
 	int newval = GetNativeCell(2);
 	points[client] = newval;
 	SavedInfectedPoints[client] = newval;
 	SavedSurvivorPoints[client] = newval;
+	
+	return true;
 }
 
 
-public int PS_GetPoints(Handle plugin, int numParams)
+public int Native_GetPoints(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
 	return points[client];
 }	
+
+public any Native_FullHeal(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	ExecuteFullHeal(client);
+	
+	return true;
+}
+
 
 public void OnClientAuthorized(int client, const char[] auth)
 {
@@ -548,7 +534,6 @@ public void OnClientAuthorized(int client, const char[] auth)
 	hurtcount[client] = 0;
 	protectcount[client] = 0;
 	headshotcount[client] = 0;
-	tankHealLimit[client] = 0;
 	NextMultipleDamage[client] = 0.0;
 	NextSpitterDamage[client] = 0.0;
 	MultipleDamageStack[client] = 0;
@@ -597,6 +582,8 @@ public Action Event_PlayerLeftStartArea(Handle event, const char[] name, bool do
 		g_bIsAreaStart = true;
 		CreateTimer(0.1, CheckMultipleDamage, 0, TIMER_REPEAT);
 	}
+	
+	return Plugin_Continue;
 }
 
 public Action PissAWitch(Handle hTimer)
@@ -681,6 +668,8 @@ public Action Check(Handle Timer, any client)
 		protectcount[client] = 0;
 		headshotcount[client] = 0;
 	}
+	
+	return Plugin_Continue;
 }	
 
 stock bool IsAllowedGameMode()
@@ -716,7 +705,6 @@ public Action Event_REnd(Handle event, char[] event_name, bool dontBroadcast)
 		}    
 	}
 	g_bIsAreaStart = false;
-	tanksspawned = 0;
 	
 	int EntityCount = GetEntityCount();
 	char sTemp[16];
@@ -733,13 +721,14 @@ public Action Event_REnd(Handle event, char[] event_name, bool dontBroadcast)
 		}
 	}
 	RequestFrame(WipeThemAll, 0);
-	witchsspawned = 0;
 	
 	if(PisserTimer != INVALID_HANDLE)
 	{
 		CloseHandle(PisserTimer);
 		PisserTimer = INVALID_HANDLE;
 	}
+	
+	return Plugin_Continue;
 }	
 
 public void WipeThemAll(int zero)
@@ -773,13 +762,6 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 	
 	CreateTimer(5.0, HelpMessage);
 	
-	tanksspawned = 0;
-	witchsspawned = 0;
-	ucommonleft = 0;
-	jimmiesleft = 0;
-	witchestoqueue = 0;
-	witchesalive = 0;
-	
 	if(PisserTimer != INVALID_HANDLE)
 	{
 		CloseHandle(PisserTimer);
@@ -787,6 +769,8 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 	}
 
 	PisserTimer = CreateTimer(GetConVarFloat(WitchPisser), PissAWitch, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+	
+	return Plugin_Continue;
 }	
 
 public Action Event_Finale(Handle event, char[] event_name, bool dontBroadcast)
@@ -810,7 +794,6 @@ public Action Event_Finale(Handle event, char[] event_name, bool dontBroadcast)
 public Action Event_Kill(Handle event, const char[] name, bool dontBroadcast)
 {
 	bool headshot = GetEventBool(event, "headshot");
-	int gender = GetEventInt(event, "gender");
 	
 	int infected_id = GetEventInt(event, "infected_id");
 	int R = 0;
@@ -823,10 +806,6 @@ public Action Event_Kill(Handle event, const char[] name, bool dontBroadcast)
 		SetEntProp(infected_id, Prop_Send, "m_iGlowType", 0); 
 		SetEntPropFloat(infected_id, Prop_Data, "m_flModelScale", 1.0);
 		AcceptEntityInput(GetEntPropEnt(infected_id, Prop_Send, "m_hRagdoll"), "Kill");
-	}
-	if(gender == 17)
-	{
-		jimmiesalive--;
 	}
 	ATTACKER
 	ACHECK2
@@ -849,6 +828,8 @@ public Action Event_Kill(Handle event, const char[] name, bool dontBroadcast)
 			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killing Spree \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SValueKillingSpree), points[attacker]);
 		}
 	}	
+	
+	return Plugin_Continue;
 }	
 
 public Action Event_Incap(Handle event, const char[] name, bool dontBroadcast)
@@ -871,7 +852,6 @@ public Action Event_Death(Handle event, const char[] name, bool dontBroadcast)
 	CLIENT
 	if(attacker > 0 && client > 0 && !IsFakeClient(attacker) && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
 	{
-		tankHealLimit[client] = 0;
 		if(GetClientTeam(attacker) == 2)
 		{
 			if(GetConVarInt(SSIKill) == -1 || GetClientTeam(client) == 2) return Plugin_Continue;
@@ -912,6 +892,8 @@ public Action Event_TankDeath(Handle event, const char[] name, bool dontBroadcas
 	}
 	tankburning[attacker] = 0;
 	tankbiled[attacker] = 0;
+	
+	return Plugin_Continue;
 }	
 
 public Action Event_WitchDeath(Handle event, const char[] name, bool dontBroadcast)
@@ -930,6 +912,9 @@ public Action Event_WitchDeath(Handle event, const char[] name, bool dontBroadca
 		}	
 	}
 	witchburning[client] = 0;
+	
+	
+	return Plugin_Continue;
 }	
 
 public Action Event_Heal(Handle event, const char[] name, bool dontBroadcast)
@@ -953,6 +938,8 @@ public Action Event_Heal(Handle event, const char[] name, bool dontBroadcast)
 			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Don't Harvest Heal Points!", GetConVarInt(SHealWarning));
 		}
 	}
+		
+	return Plugin_Continue;
 }	
 
 public Action Event_Protect(Handle event, const char[] name, bool dontBroadcast)
@@ -970,6 +957,8 @@ public Action Event_Protect(Handle event, const char[] name, bool dontBroadcast)
 		}	
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Protected Teammate\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SProtect), points[client]);
 	}
+		
+	return Plugin_Continue;
 }
 
 public Action Event_Revive(Handle event, const char[] name, bool dontBroadcast)
@@ -991,6 +980,8 @@ public Action Event_Revive(Handle event, const char[] name, bool dontBroadcast)
 			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Revived \x01%N\x03 From Ledge\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SLedge), points[client]);
 		}	
 	}
+		
+	return Plugin_Continue;
 }	
 
 public Action Event_Shock(Handle event, const char[] name, bool dontBroadcast)
@@ -1002,7 +993,9 @@ public Action Event_Shock(Handle event, const char[] name, bool dontBroadcast)
 		if(GetConVarInt(SDefib) == -1) return Plugin_Continue;
 		points[client] += GetConVarInt(SDefib);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Defibbed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SDefib), points[client]);
-	}
+	}	
+	
+	return Plugin_Continue;
 }	
 
 public Action Event_Choke(Handle event, const char[] name, bool dontBroadcast)
@@ -1014,6 +1007,8 @@ public Action Event_Choke(Handle event, const char[] name, bool dontBroadcast)
 		points[client] += GetConVarInt(IChoke);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Choked Survivor\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IChoke), points[client]);
 	}
+		
+	return Plugin_Continue;
 }
 
 public Action Event_Boom(Handle event, const char[] name, bool dontBroadcast)
@@ -1034,6 +1029,8 @@ public Action Event_Boom(Handle event, const char[] name, bool dontBroadcast)
 			tankbiled[attacker] = 1;
 		}	
 	}
+		
+	return Plugin_Continue;
 }	
 
 public Action Event_Pounce(Handle event, const char[] name, bool dontBroadcast)
@@ -1045,6 +1042,8 @@ public Action Event_Pounce(Handle event, const char[] name, bool dontBroadcast)
 		points[client] += GetConVarInt(IPounce);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Pounced Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IPounce), points[client]);
 	}
+		
+	return Plugin_Continue;
 }	
 
 public Action Event_Ride(Handle event, const char[] name, bool dontBroadcast)
@@ -1056,6 +1055,8 @@ public Action Event_Ride(Handle event, const char[] name, bool dontBroadcast)
 		points[client] += GetConVarInt(IRide);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Jockeyed Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IRide), points[client]);
 	}
+		
+	return Plugin_Continue;
 }	
 
 public Action Event_Carry(Handle event, const char[] name, bool dontBroadcast)
@@ -1067,6 +1068,8 @@ public Action Event_Carry(Handle event, const char[] name, bool dontBroadcast)
 		points[client] += GetConVarInt(ICarry);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Charged Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(ICarry), points[client]);
 	}
+		
+	return Plugin_Continue;
 }	
 
 public Action Event_Impact(Handle event, const char[] name, bool dontBroadcast)
@@ -1078,6 +1081,8 @@ public Action Event_Impact(Handle event, const char[] name, bool dontBroadcast)
 		points[client] += GetConVarInt(IImpact);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Impacted Survivor \x05+ %d\x03 points(Σ: \x05%d\x03)", GetConVarInt(IImpact), points[client]);
 	}
+	
+	return Plugin_Continue;	
 }	
 
 public Action Event_Burn(Handle event, const char[] name, bool dontBroadcast)
@@ -1100,6 +1105,8 @@ public Action Event_Burn(Handle event, const char[] name, bool dontBroadcast)
 			witchburning[client] = 1;
 		}
 	}
+	
+	return Plugin_Continue;
 }
 
 public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
@@ -1133,6 +1140,8 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 			hurtcount[attacker] -= 3;
 		}  
 	}	
+	
+	return Plugin_Continue;
 }	
 
 public Action BuyMenu(int client, int args)
@@ -1155,6 +1164,11 @@ public Action BuyMenu(int client, int args)
 		// 2 and beyond are the target's name
 		ReplaceStringEx(sArgString, sizeof(sArgString), sFirstArg, "");
 		
+		PrintToChat(client, "|%s|", sArgString);
+		// No target, so let's make the target the buyer's userid?
+		if(sArgString[0] == EOS) 
+			FormatEx(sArgString, sizeof(sArgString), "#%i", GetClientUserId(client));
+			
 		PerformPurchaseOnAlias(client, sFirstArg, sArgString);
 	}
 	return Plugin_Handled;
@@ -1723,7 +1737,8 @@ void AddFlags()
 
 void BuildBuyMenu(int client)
 {
-	
+	if(client)
+		return;
 }	
 	
 
@@ -1781,7 +1796,7 @@ stock int GetTanksCount()
 	
 	return count;
 }
-
+/*
 stock int CalculateGhostCost()
 {
 	int HighestCost = 0;
@@ -1806,8 +1821,8 @@ stock int CalculateGhostCost()
 		
 	return HighestCost;
 }
-
-stock int ExecuteFullHeal(int client)
+*/
+stock void ExecuteFullHeal(int client)
 {
 	if(GetClientTeam(client) == view_as<int>(L4DTeam_Survivor))
 	{
@@ -1843,7 +1858,10 @@ stock void SetEntityHealthToMax(int entity)
 
 stock int LookupProductByAlias(int client, char[] sAlias, enProduct finalProduct)
 {
+	
 	int iSize = GetArraySize(g_aProducts);
+	
+	PrintToChatAll("%i", iSize);
 	
 	for (int i = 0; i < iSize;i++)
 	{
@@ -1853,7 +1871,7 @@ stock int LookupProductByAlias(int client, char[] sAlias, enProduct finalProduct
 		char sAliasArray[8][32];
 		int iAliasSize = ExplodeString(product.sAliases, " ", sAliasArray, sizeof(sAliasArray), sizeof(sAliasArray[]));
 		
-		for (int a = 0; a < iAliasSize;i++)
+		for (int a = 0; a < iAliasSize;a++)
 		{
 			if(StrEqual(sAlias, sAliasArray[a], false))
 			{
@@ -1880,9 +1898,11 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 	
 	L4DTeam iTeam = view_as<L4DTeam>(GetClientTeam(client));
 	
-	if( (!product.bBuyAsInfected && iTeam == L4DTeam_Infected) || (!product.bBuyAsSurvivor && iTeam == L4DTeam_Survivor) )
+	int iBuyFlags = product.iBuyFlags;
+	
+	if( (!(iBuyFlags & BUYFLAG_INFECTED) && iTeam == L4DTeam_Infected) || (!(iBuyFlags & BUYFLAG_SURVIVOR) && iTeam == L4DTeam_Survivor) )
 	{
-		PrintToChat(client, "\x04[PS]\x03 Error: Only %s can buy this!", product.bBuyAsSurvivor ? "Survivors" : "Infected");
+		PrintToChat(client, "\x04[PS]\x03 Error: Only %s can buy this!", iBuyFlags & BUYFLAG_SURVIVOR ? "Survivors" : "Infected");
 		return;
 	}
 	
@@ -1895,18 +1915,17 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			sSecondArg,
 			client,
 			fake_target_list,
-			MAXPLAYERS,
+			MAXPLAYERS+1,
 			0,
 			target_name,
 			sizeof(target_name),
 			tn_is_ml);
 
-	
 	if(fake_target_count > 0)
 	{
-		for (int i = 0; i < target_count; i++)
+		for (int i = 0; i < fake_target_count; i++)
 		{
-			int targetclient = target_list[i];
+			int targetclient = fake_target_list[i];
 			
 			if(GetClientTeam(client) == GetClientTeam(targetclient))
 			{
@@ -1928,7 +1947,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 	{
 		int targetclient = target_list[i];
 		
-		if(!product.bBuyForTeam && targetclient != client)
+		if(!(iBuyFlags & BUYFLAG_TEAM) && targetclient != client)
 		{
 			PrintToChat(client, "\x04[PS]\x03 Cannot buy %s for teammates", sFirstArg);
 			continue;
@@ -1942,19 +1961,19 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		bool bProperClass = IsProperZombieClassForProduct(targetclient, product);
 		
 		
-		if(!product.bBuyForHumanTeam && targetclient != client && !bBot)
+		if(!(iBuyFlags & BUYFLAG_HUMANTEAM) && targetclient != client && !bBot)
 		{
 			PrintToChat(client, "\x04[PS]\x03 Cannot buy %s for non-bot teammates", sFirstArg);
 			continue;
 		}
 		
-		else if(!product.bBuyAsDead && !bAlive)
+		else if(!(iBuyFlags & BUYFLAG_DEAD) && !bAlive)
 		{
 			PrintToChat(client, "\x04[PS]\x03 %s must be alive to buy %s", targetclient == client ? "You" : Name, sFirstArg);
 			continue;
 		}
 		
-		else if(!product.bBuyAsAlive && bAlive)
+		else if(!(iBuyFlags & BUYFLAG_ALIVE) && bAlive)
 		{
 			PrintToChat(client, "\x04[PS]\x03 %s must be dead to buy %s", targetclient == client ? "You" : Name, sFirstArg);
 			continue;
@@ -1968,7 +1987,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			continue;
 		}
 		
-		else if(!product.bBuyAsPinned && bPinned)
+		else if(!(iBuyFlags & BUYFLAG_PINNED) && bPinned)
 		{
 			PrintToChat(client, "\x04[PS]\x03 %s mustn't be pinned to buy %s", targetclient == client ? "You" : Name, sFirstArg);
 			continue;
@@ -1980,18 +1999,19 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			continue;
 		}
 	
-		Call_StartForward(g_fwOnBuyProduct);
+		Call_StartForward(g_fwOnTryBuyProduct);
 		
 		enProduct alteredProduct; 
 		alteredProduct = product;
 		
 		Call_PushCell(client);
+		Call_PushString(alteredProduct.sInfo);
 		Call_PushString(alteredProduct.sAliases);
 		Call_PushString(alteredProduct.sName);
 		Call_PushCellRef(targetclient);
 		Call_PushCellRef(alteredProduct.iCost);
-		Call_PushCellRef(alteredProduct.fDelay);
-		Call_PushCellRef(alteredProduct.fCooldown);
+		Call_PushFloatRef(alteredProduct.fDelay);
+		Call_PushFloatRef(alteredProduct.fCooldown);
 		
 		Action result;
 		Call_Finish(result);
@@ -2001,8 +2021,13 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			continue;
 		}
 		
-		product.NextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fCooldown;
+		if(points[client] < alteredProduct.iCost)
+		{
+			PrintToChat(client, NOT_ENOUGH_POINTS, alteredProduct.iCost - points[client], points[client]);
+			continue;
+		}
 		
+		product.NextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fCooldown;
 		points[client] -= alteredProduct.iCost;
 		
 		SetArrayArray(g_aProducts, productPos, product);
@@ -2048,15 +2073,27 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	enProduct alteredProduct;
 	DP.ReadCellArray(alteredProduct, sizeof(alteredProduct));
 	
+	enProduct product;
+	
+	int productPos = LookupProductByAlias(client, sFirstArg, product);
+	
+	// Should not happen/
+	if(productPos == -1)
+	{
+		PrintToChat(client, "\x04[PS]\x03 Error: Product could not be found!");
+		return Plugin_Stop;
+	}
+	
 	Call_StartForward(g_fwOnBuyProductPost);
 	
 	Call_PushCell(client);
+	Call_PushString(alteredProduct.sInfo);
 	Call_PushString(alteredProduct.sAliases);
 	Call_PushString(alteredProduct.sName);
 	Call_PushCell(targetclient);
 	Call_PushCell(alteredProduct.iCost);
-	Call_PushCell(alteredProduct.fDelay);
-	Call_PushCell(alteredProduct.fCooldown);
+	Call_PushFloat(alteredProduct.fDelay);
+	Call_PushFloat(alteredProduct.fCooldown);
 	
 	Action result;
 	Call_Finish(result);
@@ -2065,7 +2102,12 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	{
 		points[client] += alteredProduct.iCost;
 		
-		PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, alteredProduct.iCost, points[client]);		
+		if(alteredProduct.iCost > 0)
+		{
+			product.NextBuyProduct[targetclient] = 0.0;
+			SetArrayArray(g_aProducts, productPos, product);
+			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, alteredProduct.iCost, points[client]);		
+		}
 		
 		return Plugin_Stop;
 	}
@@ -2073,14 +2115,29 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	Call_StartForward(g_fwOnShouldGiveProduct);
 	
 	Call_PushCell(client);
+	Call_PushString(alteredProduct.sInfo);
 	Call_PushString(alteredProduct.sAliases);
 	Call_PushString(alteredProduct.sName);
 	Call_PushCell(targetclient);
 	Call_PushCell(alteredProduct.iCost);
-	Call_PushCell(alteredProduct.fDelay);
-	Call_PushCell(alteredProduct.fCooldown);
+	Call_PushFloat(alteredProduct.fDelay);
+	Call_PushFloat(alteredProduct.fCooldown);	
 	
-	Call_Finish();
+	Call_Finish(result);
+	
+	if(result >= Plugin_Handled)
+	{
+		points[client] += alteredProduct.iCost;
+		
+		if(alteredProduct.iCost > 0)
+		{
+			product.NextBuyProduct[targetclient] = 0.0;
+			SetArrayArray(g_aProducts, productPos, product);
+			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, alteredProduct.iCost, points[client]);		
+		}
+		
+		return Plugin_Stop;
+	}
 
 	return Plugin_Stop;
 }
@@ -2109,5 +2166,38 @@ stock void ResetProductCooldowns()
 			product.NextBuyProduct[a] = 0.0;
 		
 		SetArrayArray(g_aProducts, i, product);
+	}
+}
+
+stock void DeleteProductsByAliases(char[] sAliases)
+{	
+	// i can be decremented, mustn't use int iSize = GetArraySize(g_aProducts)
+	for (int i = 0; i < GetArraySize(g_aProducts);i++)
+	{
+		
+		enProduct product;
+		GetArrayArray(g_aProducts, i, product);
+		
+		char sAliasArray[8][32];
+		int iAliasSize = ExplodeString(product.sAliases, " ", sAliasArray, sizeof(sAliasArray), sizeof(sAliasArray[]));
+		
+		char sAliasArray2[8][32];
+		int iAliasSize2 = ExplodeString(sAliases, " ", sAliasArray2, sizeof(sAliasArray2), sizeof(sAliasArray2[]));
+		
+		for (int a = 0; a < iAliasSize;a++)
+		{
+			for (int b = 0; b < iAliasSize2;b++)
+			{
+				if(StrEqual(sAliasArray[a], sAliasArray2[b], false))
+				{
+					RemoveFromArray(g_aProducts, i);
+					
+					// Exit the loops of "a" and "b", re-do the item in loop of "i".
+					a = iAliasSize;
+					b = iAliasSize2;
+					i--;
+				}
+			}
+		}
 	}
 }
