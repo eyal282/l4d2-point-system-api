@@ -1655,7 +1655,7 @@ public Action Command_SendPoints(int client, int args)
 	return Plugin_Handled;
 }
 
-/*
+
 void RemoveFlags()
 {
 	int flagsgive = GetCommandFlags("give");
@@ -1683,7 +1683,18 @@ void AddFlags()
 	SetCommandFlags("upgrade_add", flagsupgradeadd|FCVAR_CHEAT);
 	SetCommandFlags("director_force_panic_event", flagspanic|FCVAR_CHEAT);
 }
-*/
+
+stock void ExecuteCheatCommand(int client, const char[] command, any ...)
+{
+	char formattedCommand[256];
+	
+	VFormat(formattedCommand, sizeof(formattedCommand), command, 3);
+	RemoveFlags();
+	
+	FakeClientCommand(client, command);
+	
+	AddFlags();
+}
 
 void BuildBuyMenu(int client)
 {
@@ -1787,15 +1798,12 @@ stock void ExecuteFullHeal(int client)
 		}	
 		else if(bIncap)
 		{
-			L4D2_VScriptWrapper_ReviveFromIncap(client);
-			L4D_SetPlayerThirdStrikeState(client, false);
-			L4D_SetPlayerReviveCount(client, 0);
+			ExecuteCheatCommand(client, "give health");
 			SetEntityHealthToMax(client);
 		}
 		else
 		{
-			L4D_SetPlayerThirdStrikeState(client, false);
-			L4D_SetPlayerReviveCount(client, 0);
+			ExecuteCheatCommand(client, "give health");
 			SetEntityHealthToMax(client);
 		}
 	}

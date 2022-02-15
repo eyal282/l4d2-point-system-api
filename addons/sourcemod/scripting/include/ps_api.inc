@@ -3,9 +3,13 @@
 #endif
 #define _PS_API_included
 
+
+#define NO_DESCRIPTION "" // Simple way to understand the empty space is a description
+
 #define BUYFLAG_ALIVE				(1<<0) // Can this product be bought while you're alive? Ghosts are a third life state for PSAPI
-#define BUYFLAG_DEAD				(1<<10) // Can this product be bought while you're dead?
-#define BUYFLAG_GHOST				(1<<20) // Can this product be bought while you're a ghost?
+#define BUYFLAG_INCAP				(1<<10) // Can this product be bought while you're incapacitated?
+#define BUYFLAG_DEAD				(1<<20) // Can this product be bought while you're dead?
+#define BUYFLAG_GHOST				(1<<30) // Can this product be bought while you're a ghost?
 
 #define BUYFLAG_ANY_ALIVE			BUYFLAG_ALIVE|BUYFLAG_GHOST // Can this product be bought when a player has m_isAlive?
 
