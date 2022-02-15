@@ -79,19 +79,19 @@ public void CreateInfectedItems()
 		char sDesc[64], sInfo[64];
 		FormatEx(sDesc, sizeof(sDesc), "Ghost spawn of a %s", g_sSINames[i]);
 		FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %s", g_sSIClassnames[i]);
-		PS_CreateProduct(-1, 0, g_sSINames[i], sDesc, g_sSIClassnames[i], sInfo, "", 0.0, 5.0,
+		PS_CreateProduct(-1, 0, g_sSINames[i], sDesc, g_sSIClassnames[i], sInfo, 0.0, 5.0,
 		BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	}
 	
 
-	PS_CreateProduct(-1, 0, "Ghost", "Instantly revives you to pick any Special Infected", "ghost", "Special Infected Ghost Spawn", "", 0.0, 5.0,
-	BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_TEAM | BUYFLAG_HUMANTEAM);
+	PS_CreateProduct(-1, 0, "Ghost", "Instantly revives you to pick any Special Infected", "ghost", "Special Infected Ghost Spawn", 0.0, 5.0,
+	BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_TEAM);
 	
-	PS_CreateProduct(-1, 0, "Tank", "Ghost spawn of a Tank", "tank", "Special Infected Spawn - tank", "", 0.0, 5.0,
+	PS_CreateProduct(-1, 0, "Tank", "Ghost spawn of a Tank", "tank", "Special Infected Spawn - tank", 0.0, 5.0,
 	BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
-	PS_CreateProduct(-1, 0, "Suicide", "Instantly kills you", "kill suicide die death", "infected suicide", "", 0.0, 5.0,
-	BUYFLAG_INFECTED | BUYFLAG_ALIVE);	
+	PS_CreateProduct(-1, 0, "Suicide", "Instantly kills you", "kill suicide die death", "infected suicide", 0.0, 5.0,
+	BUYFLAG_INFECTED | BUYFLAG_ANY_ALIVE);	
 }
 
 

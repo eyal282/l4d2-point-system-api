@@ -1955,9 +1955,10 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		GetClientName(targetclient, Name, sizeof(Name));
 		bool bBot = IsFakeClient(targetclient);
 		bool bAlive = IsPlayerAlive(targetclient);
+		bool bGhost = L4D_IsPlayerGhost(targetclient);
 		bool bPinned = L4D_IsPlayerPinned(targetclient);
 		int pinningClient = L4D_GetPinnedInfected(targetclient);
-		int pinningClass = 0;
+		int pinningClass = view_as<int>(L4D2ZombieClass_NotInfected);
 		bool bProperClass = IsProperZombieClassForProduct(targetclient, product);
 		
 		if(pinningClient > 0)
@@ -1970,6 +1971,11 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			continue;
 		}
 		
+		else if(!(iBuyFlags & BUYFLAG_GHOST) && bGhost)
+		{
+			PrintToChat(client, "\x04[PS]\x03 %s must be %s to buy %s", targetclient == client ? "You" : Name, iBuyFlags & BUYFLAG_ALIVE ? "alive" : "dead", sFirstArg);
+			continue;
+		}
 		else if(!(iBuyFlags & BUYFLAG_DEAD) && !bAlive)
 		{
 			PrintToChat(client, "\x04[PS]\x03 %s must be alive to buy %s", targetclient == client ? "You" : Name, sFirstArg);
@@ -1996,7 +2002,13 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			continue;
 		}
 		
-		else if(!(iBuyFlags & pinningClass))
+		else if(iBuyFlags & BUYFLAG_ONLY_PINNED && !bPinned)
+		{
+			PrintToChat(client, "\x04[PS]\x03 %s must be pinned to buy %s", targetclient == client ? "You" : Name, sFirstArg);
+			continue;
+		}
+		
+		else if(pinningClass != view_as<int>(L4D2ZombieClass_NotInfected) && !(iBuyFlags & (1>>pinningClass)))
 		{
 			PrintToChat(client, "\x04[PS]\x03 %s mustn't be pinned by a %s to buy %s", targetclient == client ? "You" : Name, g_sBossNames[pinningClass], sFirstArg);
 			continue;
@@ -2153,6 +2165,12 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 
 stock bool IsProperZombieClassForProduct(int client, enProduct product)
 {
+	if(!IsPlayerAlive(client))
+		return true;
+		
+	else if(GetClientTeam(client) == view_as<int>(L4DTeam_Survivor))
+		return true;
+		
 	return view_as<bool>(product.iBuyFlags & view_as<int>(L4D2_GetPlayerZombieClass(client)));
 }
 

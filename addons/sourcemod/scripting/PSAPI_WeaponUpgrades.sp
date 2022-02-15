@@ -56,14 +56,14 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 public void CreateProducts()
 {
-	PS_CreateProduct(-1, GetConVarInt(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "exammo expammo", "upgrade_add EXPLOSIVE_AMMO", "", 0.0, 0.0,
-	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_HUMANTEAM);	
+	PS_CreateProduct(-1, GetConVarInt(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "exammo expammo", "upgrade_add EXPLOSIVE_AMMO", 0.0, 0.0,
+	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM);	
 	
-	PS_CreateProduct(-1, GetConVarInt(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add INCENDIARY_AMMO", "", 0.0, 0.0,
-	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_HUMANTEAM);	
+	PS_CreateProduct(-1, GetConVarInt(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add INCENDIARY_AMMO", 0.0, 0.0,
+	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_BOTTEAM);	
 	
-	PS_CreateProduct(-1, GetConVarInt(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add LASER_SIGHT", "", 0.0, 0.0,
-	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_HUMANTEAM);	
+	PS_CreateProduct(-1, GetConVarInt(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add LASER_SIGHT", 0.0, 0.0,
+	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_BOTTEAM);	
 }
 
 
