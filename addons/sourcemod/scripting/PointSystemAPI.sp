@@ -21,7 +21,6 @@ enum struct enCategory
 	char sID[64]; // Identifier between plugins, players cannot see this.
 	char sName[64]; // Category Name
 	int iBuyFlags; // Must use variable that determines flags that specify when you can buy. BUYFLAG_* in ps_api.inc
-	char sNoInfectedList[16]; // Merged numbers of infected that cannot buy this.
 }
 
 enum struct enProduct
@@ -33,7 +32,7 @@ enum struct enProduct
 	char sDescription[128]; // Optional Description
 	char sAliases[256]; // Alises, seperated by spaces, to buy directly with !buy <alias>
 	char sInfo[64]; // Info that only devs can see.
-	char sNoInfectedList[16]; // Merged numbers of infected that cannot buy this.
+
 	float fDelay; // Delay between purchase to obtaining the product.
 	float fCooldown; // Cooldown between purchases.
 	
@@ -466,12 +465,11 @@ public any Native_CreateProduct(Handle plugin, int numParams)
 	GetNativeString(4, product.sDescription, sizeof(enProduct::sDescription));
 	GetNativeString(5, product.sAliases, sizeof(enProduct::sAliases));
 	GetNativeString(6, product.sInfo, sizeof(enProduct::sInfo));
-	GetNativeString(7, product.sNoInfectedList, sizeof(enProduct::sNoInfectedList));
 	
-	product.fDelay = GetNativeCell(8);
-	product.fCooldown = GetNativeCell(9);
+	product.fDelay = GetNativeCell(7);
+	product.fCooldown = GetNativeCell(8);
 	
-	product.iBuyFlags = GetNativeCell(10);
+	product.iBuyFlags = GetNativeCell(9);
 	
 	DeleteProductsByAliases(product.sAliases);
 	
@@ -1900,7 +1898,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 	
 	int iBuyFlags = product.iBuyFlags;
 	
-	if( (!(iBuyFlags & BUYFLAG_INFECTED) && iTeam == L4DTeam_Infected) || (!(iBuyFlags & BUYFLAG_SURVIVOR) && iTeam == L4DTeam_Survivor) )
+	if( (iBuyFlags & BUYFLAG_INFECTED != BUYFLAG_INFECTED && iTeam == L4DTeam_Infected) || (!(iBuyFlags & BUYFLAG_SURVIVOR) && iTeam == L4DTeam_Survivor))
 	{
 		PrintToChat(client, "\x04[PS]\x03 Error: Only %s can buy this!", iBuyFlags & BUYFLAG_SURVIVOR ? "Survivors" : "Infected");
 		return;
@@ -1958,7 +1956,12 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		bool bBot = IsFakeClient(targetclient);
 		bool bAlive = IsPlayerAlive(targetclient);
 		bool bPinned = L4D_IsPlayerPinned(targetclient);
+		int pinningClient = L4D_GetPinnedInfected(targetclient);
+		int pinningClass = 0;
 		bool bProperClass = IsProperZombieClassForProduct(targetclient, product);
+		
+		if(pinningClient > 0)
+			pinningClass = view_as<int>(L4D2_GetPlayerZombieClass(client));
 		
 		
 		if(!(iBuyFlags & BUYFLAG_HUMANTEAM) && targetclient != client && !bBot)
@@ -1990,6 +1993,12 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		else if(!(iBuyFlags & BUYFLAG_PINNED) && bPinned)
 		{
 			PrintToChat(client, "\x04[PS]\x03 %s mustn't be pinned to buy %s", targetclient == client ? "You" : Name, sFirstArg);
+			continue;
+		}
+		
+		else if(!(iBuyFlags & pinningClass))
+		{
+			PrintToChat(client, "\x04[PS]\x03 %s mustn't be pinned by a %s to buy %s", targetclient == client ? "You" : Name, g_sBossNames[pinningClass], sFirstArg);
 			continue;
 		}
 		
@@ -2144,13 +2153,7 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 
 stock bool IsProperZombieClassForProduct(int client, enProduct product)
 {
-	if(GetClientTeam(client) == view_as<int>(L4DTeam_Survivor))
-		return true;
-		
-	char sZombieClass[2];
-	IntToString(view_as<int>(L4D2_GetPlayerZombieClass(client)), sZombieClass, sizeof(sZombieClass));
-	
-	return StrContains(product.sNoInfectedList, sZombieClass) == -1;
+	return view_as<bool>(product.iBuyFlags & view_as<int>(L4D2_GetPlayerZombieClass(client)));
 }
 
 stock void ResetProductCooldowns()
