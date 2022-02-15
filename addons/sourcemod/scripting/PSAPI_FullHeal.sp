@@ -89,10 +89,10 @@ public void CreateProducts()
 
 	
 	PS_CreateProduct(-1, 100, "Heal", "Heals you to max health\nTanks gain less health", "heal", "Partial Heal", 0.0, 0.0,
-	BUYFLAG_INFECTED | BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM);	
+	BUYFLAG_INFECTED | BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
 	
 	PS_CreateProduct(-1, 100, "Full Heal", "Heals you to max health\nTanks buy this over and over until full health", "fheal fullheal", "Full Heal", 0.0, 0.0,
-	BUYFLAG_INFECTED | BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM);	
+	BUYFLAG_INFECTED | BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
 }
 
 

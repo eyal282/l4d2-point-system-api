@@ -78,56 +78,7 @@ Handle Modes = INVALID_HANDLE;
 Handle Notifications = INVALID_HANDLE;
 //Item buyables
 /*
-Handle PointsPistol = INVALID_HANDLE;
-Handle PointsMagnum = INVALID_HANDLE;
-Handle PointsSMG = INVALID_HANDLE;
-Handle PointsSSMG = INVALID_HANDLE;
-Handle PointsMP5 = INVALID_HANDLE;
-Handle PointsM16 = INVALID_HANDLE;
-Handle PointsAK = INVALID_HANDLE;
-Handle PointsSCAR = INVALID_HANDLE;
-Handle PointsSG = INVALID_HANDLE;
-Handle PointsHunting = INVALID_HANDLE;
-Handle PointsMilitary = INVALID_HANDLE;
-Handle PointsAWP = INVALID_HANDLE;
-Handle PointsScout = INVALID_HANDLE;
-Handle PointsAuto = INVALID_HANDLE;
-Handle PointsSpas = INVALID_HANDLE;
-Handle PointsChrome = INVALID_HANDLE;
-Handle PointsPump = INVALID_HANDLE;
-Handle PointsGL = INVALID_HANDLE;
-Handle PointsM60 = INVALID_HANDLE;
-Handle PointsGasCan = INVALID_HANDLE;
-Handle PointsOxy = INVALID_HANDLE;
-Handle PointsKnife = INVALID_HANDLE;
-Handle PointsPropane = INVALID_HANDLE;
-Handle PointsGnome = INVALID_HANDLE;
-Handle PointsCola = INVALID_HANDLE;
-Handle PointsFireWorks = INVALID_HANDLE;
-Handle PointsBat = INVALID_HANDLE;
-Handle PointsMachete = INVALID_HANDLE;
-Handle PointsKatana = INVALID_HANDLE;
-Handle PointsTonfa = INVALID_HANDLE;
-Handle PointsFireaxe = INVALID_HANDLE;
-Handle PointsGuitar = INVALID_HANDLE;
-Handle PointsPan = INVALID_HANDLE;
-Handle PointsCBat = INVALID_HANDLE;
-Handle PointsCrow = INVALID_HANDLE;
-Handle PointsClub = INVALID_HANDLE;
-Handle PointsSaw = INVALID_HANDLE;
-Handle PointsPipe = INVALID_HANDLE;
-Handle PointsMolly = INVALID_HANDLE;
-Handle PointsBile = INVALID_HANDLE;
-Handle PointsKit = INVALID_HANDLE;
-Handle PointsDefib = INVALID_HANDLE;
-Handle PointsAdren = INVALID_HANDLE;
-Handle PointsPills = INVALID_HANDLE;
-Handle PointsEAmmo = INVALID_HANDLE;
-Handle PointsIAmmo = INVALID_HANDLE;
-Handle PointsEAmmoPack = INVALID_HANDLE;
-Handle PointsIAmmoPack = INVALID_HANDLE;
-Handle PointsLSight = INVALID_HANDLE;
-Handle PointsRefill = INVALID_HANDLE;
+
 Handle PointsHeal = INVALID_HANDLE;
 */
 //Survivor point earning things
@@ -1162,7 +1113,8 @@ public Action BuyMenu(int client, int args)
 		// 2 and beyond are the target's name
 		ReplaceStringEx(sArgString, sizeof(sArgString), sFirstArg, "");
 		
-		PrintToChat(client, "|%s|", sArgString);
+		TrimString(sArgString);
+		
 		// No target, so let's make the target the buyer's userid?
 		if(sArgString[0] == EOS) 
 			FormatEx(sArgString, sizeof(sArgString), "#%i", GetClientUserId(client));
@@ -1835,10 +1787,17 @@ stock void ExecuteFullHeal(int client)
 		}	
 		else if(bIncap)
 		{
-			L4D_ReviveSurvivor(client);
+			L4D2_VScriptWrapper_ReviveFromIncap(client);
+			L4D_SetPlayerThirdStrikeState(client, false);
+			L4D_SetPlayerReviveCount(client, 0);
+			SetEntityHealthToMax(client);
 		}
 		else
+		{
+			L4D_SetPlayerThirdStrikeState(client, false);
+			L4D_SetPlayerReviveCount(client, 0);
 			SetEntityHealthToMax(client);
+		}
 	}
 	else
 	{
@@ -1858,8 +1817,6 @@ stock int LookupProductByAlias(int client, char[] sAlias, enProduct finalProduct
 {
 	
 	int iSize = GetArraySize(g_aProducts);
-	
-	PrintToChatAll("%i", iSize);
 	
 	for (int i = 0; i < iSize;i++)
 	{
@@ -1894,9 +1851,16 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		return;
 	}
 	
+	else if(product.iCost < 0)
+	{
+		PrintToChat(client, "\x04[PS]\x03 Error: This product is disabled!");
+		return;
+	}
+	
 	L4DTeam iTeam = view_as<L4DTeam>(GetClientTeam(client));
 	
 	int iBuyFlags = product.iBuyFlags;
+	
 	
 	if( (iBuyFlags & BUYFLAG_INFECTED != BUYFLAG_INFECTED && iTeam == L4DTeam_Infected) || (!(iBuyFlags & BUYFLAG_SURVIVOR) && iTeam == L4DTeam_Survivor))
 	{
@@ -1962,7 +1926,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		bool bProperClass = IsProperZombieClassForProduct(targetclient, product);
 		
 		if(pinningClient > 0)
-			pinningClass = view_as<int>(L4D2_GetPlayerZombieClass(client));
+			pinningClass = view_as<int>(L4D2_GetPlayerZombieClass(pinningClient));
 		
 		
 		if(!(iBuyFlags & BUYFLAG_HUMANTEAM) && targetclient != client && !bBot)
@@ -2008,7 +1972,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			continue;
 		}
 		
-		else if(pinningClass != view_as<int>(L4D2ZombieClass_NotInfected) && !(iBuyFlags & (1>>pinningClass)))
+		else if(pinningClass != view_as<int>(L4D2ZombieClass_NotInfected) && !(iBuyFlags & (1<<pinningClass)))
 		{
 			PrintToChat(client, "\x04[PS]\x03 %s mustn't be pinned by a %s to buy %s", targetclient == client ? "You" : Name, g_sBossNames[pinningClass], sFirstArg);
 			continue;
