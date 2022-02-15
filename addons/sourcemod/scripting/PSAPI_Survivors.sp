@@ -174,56 +174,45 @@ public void CreateSurvivorProducts()
 {
 	
 	// Pistols
-	PS_CreateProduct(-1, GetConVarInt(PointsPistol), "Pistol", NO_DESCRIPTION, "pistol", "give pistol", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(-1, GetConVarInt(PointsMagnum), "Magnum", NO_DESCRIPTION, "magnum", "give pistol_magnum", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_BOTTEAM);
+	PS_CreateProduct(-1, GetConVarInt(PointsPistol), "Pistol", NO_DESCRIPTION, "pistol", "give pistol", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PS_CreateProduct(-1, GetConVarInt(PointsMagnum), "Magnum", NO_DESCRIPTION, "magnum", "give pistol_magnum", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_BOTTEAM | BUYFLAG_INCAP);
 	
 	// Melee
 	PS_CreateProduct(-1, GetConVarInt(PointsBat), "Bat", NO_DESCRIPTION, "bat", "give cricket_bat", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PS_CreateProduct(-1, GetConVarInt(PointsMachete), "Machete", NO_DESCRIPTION, "machete", "give machete", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(-1, GetConVarInt(PointsKatana), "katana", NO_DESCRIPTION, "katana", "give katana", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsKatana), "Katana", NO_DESCRIPTION, "katana", "give katana", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PS_CreateProduct(-1, GetConVarInt(PointsTonfa), "Tonfa", NO_DESCRIPTION, "tonfa", "give tonfa", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PS_CreateProduct(-1, GetConVarInt(PointsFireaxe), "Fireaxe", NO_DESCRIPTION, "fireaxe axe", "give fireaxe", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PS_CreateProduct(-1, GetConVarInt(PointsKnife), "Knife", NO_DESCRIPTION, "knife", "give knife", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PS_CreateProduct(-1, GetConVarInt(PointsGuitar), "Guitar", NO_DESCRIPTION, "guitar", "give electric_guitar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PS_CreateProduct(-1, GetConVarInt(PointsPan), "Pan", NO_DESCRIPTION, "pan", "give frying_pan", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PS_CreateProduct(-1, GetConVarInt(PointsCrow), "Crowbar", NO_DESCRIPTION, "crow bar crowbar", "give crowbar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(-1, GetConVarInt(PointsClub), "Golf Club", NO_DESCRIPTION, "golf club", "give ", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(-1, GetConVarInt(PointsSaw), "Bat", NO_DESCRIPTION, "chainsaw chain saw", "give chainsaw", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	
-	// Melee
-	PointsBat = CreateConVar("l4d2_points_bat", "4", "How many points the cricket bat costs");
-	PointsMachete = CreateConVar("l4d2_points_machete", "6", "How many points the machete costs");
-	PointsKatana = CreateConVar("l4d2_points_katana", "6", "How many points the katana costs");
-	PointsTonfa = CreateConVar("l4d2_points_tonfa", "4", "How many points the tonfa costs");
-	PointsFireaxe = CreateConVar("l4d2_points_fireaxe", "4", "How many points the fireaxe costs");
-	PointsKnife = CreateConVar("l4d2_points_knife", "50", "How many points the knife costs");
-	PointsGuitar = CreateConVar("l4d2_points_guitar", "4", "How many points the guitar costs");
-	PointsPan = CreateConVar("l4d2_points_pan", "4", "How many points the frying pan costs");
-	PointsCrow = CreateConVar("l4d2_points_crowbar", "4", "How many points the crowbar costs");
-	PointsClub = CreateConVar("l4d2_points_golfclub", "6", "How many points the golf club costs");
-	PointsSaw = CreateConVar("l4d2_points_chainsaw", "10", "How many points the chainsaw costs");
+	PS_CreateProduct(-1, GetConVarInt(PointsClub), "Golf Club", NO_DESCRIPTION, "golf club", "give golfclub", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsSaw), "Chainsaw", NO_DESCRIPTION, "chainsaw chain saw", "give chainsaw", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+
 	
 	// Throwables
-	PointsPipe = CreateConVar("l4d2_points_pipe", "8", "How many points the pipe bomb costs");
-	PointsMolly = CreateConVar("l4d2_points_molotov", "8", "How many points the molotov costs");
-	PointsBile = CreateConVar("l4d2_points_bile", "8", "How many points the bile jar costs");
+	PS_CreateProduct(-1, GetConVarInt(PointsPipe), "Pipe Bomb", NO_DESCRIPTION, "pipe pipebomb", "give pipe_bomb", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsMolly), "Molotov", NO_DESCRIPTION, "molotov molly moly cocktail", "give molotov", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsBile), "Bile Bomb", NO_DESCRIPTION, "bile jar", "give vomitjar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	
 	
 	// Health Items
-	PointsKit = CreateConVar("l4d2_points_kit", "20", "How many points the health kit costs");
-	PointsDefib = CreateConVar("l4d2_points_defib", "20", "How many points the defib costs");
-	PointsAdren = CreateConVar("l4d2_points_adrenaline", "10", "How many points the adrenaline costs");
-	PointsPills = CreateConVar("l4d2_points_pills", "10", "How many points the pills costs");
+	PS_CreateProduct(-1, GetConVarInt(PointsKit), "First Aid Kit", NO_DESCRIPTION, "kit med medkit aid", "give first_aid_kit", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsDefib), "Defibrillator", NO_DESCRIPTION, "defib defibrillator defibrilator defibillator defibilator", "give defibrillator", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsAdren), "Adrenaline", NO_DESCRIPTION, "adren adrenaline shot", "give adrenaline", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsPills), "Pills", NO_DESCRIPTION, "pills pill", "give pain_pills", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	
 	// SMG
-	PointsSMG = CreateConVar("l4d2_points_smg", "7", "How many points the smg costs");
-	PointsSSMG = CreateConVar("l4d2_points_ssmg", "7", "How many points the silenced smg costs");
-	PointsMP5 = CreateConVar("l4d2_points_mp5", "7", "How many points the mp5 costs");
+	PS_CreateProduct(-1, GetConVarInt(PointsSMG), "SMG", NO_DESCRIPTION, "smg", "give smg", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsSSMG), "Silenced SMG", NO_DESCRIPTION, "ssmg", "give smg_silenced", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsMP5), "MP5", NO_DESCRIPTION, "mp5", "give smg_mp5", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	
 	// Shotguns
-	PointsPump = CreateConVar("l4d2_points_pump", "7", "How many points the pump shotgun costs");
-	PointsChrome = CreateConVar("l4d2_points_chrome", "7", "How many points the chrome shotgun costs");
-	PointsAuto = CreateConVar("l4d2_points_autoshotgun", "10", "How many points the autoshotgun costs");
-	PointsSpas = CreateConVar("l4d2_points_spas", "10", "How many points the spas shotgun costs");
+	PS_CreateProduct(-1, GetConVarInt(PointsPump), "Pump Shotgun", NO_DESCRIPTION, "pump shotgun", "give pumpshotgun", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsChrome), "Chrome Shotgun", NO_DESCRIPTION, "chrome", "give shotgun_chrome", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsAuto), "Auto Shotgun", NO_DESCRIPTION, "auto autoshotgun", "give autoshotgun", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PS_CreateProduct(-1, GetConVarInt(PointsSpas), "Spas", NO_DESCRIPTION, "spas", "give shotgun_spas", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	
 	// Rifles
 	PointsDesert = CreateConVar("l4d2_points_desert", "12", "How many points the desert rifle costs");	
