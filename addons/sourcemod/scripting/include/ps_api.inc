@@ -6,6 +6,7 @@
 
 #define NO_DESCRIPTION "" // Simple way to understand the empty space is a description
 
+#define BUYFLAG_ALL_LIFESTATES		BUYFLAG_ALIVE|BUYFLAG_INCAP|BUYFLAG_DEAD|BUYFLAG_GHOST
 #define BUYFLAG_ALIVE				(1<<0) // Can this product be bought while you're alive? Ghosts are a third life state for PSAPI
 #define BUYFLAG_INCAP				(1<<10) // Can this product be bought while you're incapacitated?
 #define BUYFLAG_DEAD				(1<<20) // Can this product be bought while you're dead?
@@ -68,3 +69,35 @@ forward Action PointSystemAPI_OnBuyProductPost(int buyer, const char[] info, con
 
 // Return Plugin_Handled to refund if you cannot give the product, which should be rare.
 forward Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] info, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown);
+
+
+
+
+
+// Stocks
+
+
+
+stock void PSAPI_ExecuteCheatCommand(int client, const char[] command, any ...)
+{
+	int flagsgive = GetCommandFlags("give");
+	int flagszspawnold = GetCommandFlags("z_spawn_old");
+	int flagszspawn = GetCommandFlags("z_spawn");
+	int flagsupgradeadd = GetCommandFlags("upgrade_add");
+
+	SetCommandFlags("give", flagsgive & ~FCVAR_CHEAT);
+	SetCommandFlags("z_spawn_old", flagszspawnold & ~FCVAR_CHEAT);
+	SetCommandFlags("z_spawn", flagszspawn & ~FCVAR_CHEAT);
+	SetCommandFlags("upgrade_add", flagsupgradeadd & ~FCVAR_CHEAT);
+	
+	char formattedCommand[256];
+	
+	VFormat(formattedCommand, sizeof(formattedCommand), command, 3);
+	
+	FakeClientCommand(client, command);
+	
+	SetCommandFlags("give", flagsgive);
+	SetCommandFlags("z_spawn_old", flagszspawnold);
+	SetCommandFlags("z_spawn", flagszspawn);
+	SetCommandFlags("upgrade_add", flagsupgradeadd);
+}
