@@ -48,7 +48,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 {
 	if(strncmp(sInfo, "upgrade_add", 11) == 0)
 	{
-		ExecuteCheatCommand(target, sInfo);
+		PSAPI_ExecuteCheatCommand(target, sInfo);
 	}
 	
 	return Plugin_Continue;
@@ -65,47 +65,6 @@ public void CreateProducts()
 	PS_CreateProduct(-1, GetConVarInt(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add LASER_SIGHT", 0.0, 0.0,
 	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_BOTTEAM);	
 }
-
-
-stock void ExecuteCheatCommand(int client, const char[] command, any ...)
-{
-	char formattedCommand[256];
-	
-	VFormat(formattedCommand, sizeof(formattedCommand), command, 3);
-	RemoveFlags();
-	
-	FakeClientCommand(client, command);
-	
-	AddFlags();
-}
-void RemoveFlags()
-{
-	int flagsgive = GetCommandFlags("give");
-	int flagszspawnold = GetCommandFlags("z_spawn_old");
-	int flagszspawn = GetCommandFlags("z_spawn");
-	int flagsupgradeadd = GetCommandFlags("upgrade_add");
-	int flagspanic = GetCommandFlags("director_force_panic_event");
-	SetCommandFlags("give", flagsgive & ~FCVAR_CHEAT);
-	SetCommandFlags("z_spawn_old", flagszspawnold & ~FCVAR_CHEAT);
-	SetCommandFlags("z_spawn", flagszspawn & ~FCVAR_CHEAT);
-	SetCommandFlags("upgrade_add", flagsupgradeadd & ~FCVAR_CHEAT);
-	SetCommandFlags("director_force_panic_event", flagspanic & ~FCVAR_CHEAT);
-}	
-
-void AddFlags()
-{
-	int flagsgive = GetCommandFlags("give");
-	int flagszspawnold = GetCommandFlags("z_spawn_old");
-	int flagszspawn = GetCommandFlags("z_spawn");
-	int flagsupgradeadd = GetCommandFlags("upgrade_add");
-	int flagspanic = GetCommandFlags("director_force_panic_event");
-	SetCommandFlags("give", flagsgive|FCVAR_CHEAT);
-	SetCommandFlags("z_spawn_old", flagszspawnold|FCVAR_CHEAT);
-	SetCommandFlags("z_spawn", flagszspawn|FCVAR_CHEAT);
-	SetCommandFlags("upgrade_add", flagsupgradeadd|FCVAR_CHEAT);
-	SetCommandFlags("director_force_panic_event", flagspanic|FCVAR_CHEAT);
-}
-
 
 stock void SetPlayerAlive(int client, bool alive)
 {

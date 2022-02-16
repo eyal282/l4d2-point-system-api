@@ -11,7 +11,6 @@
 
 #define PLUGIN_VERSION "1.0"
 
-char g_sSINames[][]={"","Smoker","Boomer","Hunter","Spitter","Jockey","Charger"};
 char g_sSIClassnames[][]={"","smoker","boomer","hunter","spitter", "jockey","charger"};
 char g_sBossClassnames[][]={"","smoker","boomer","hunter","spitter","jockey","charger", "","tank"};
 
@@ -162,7 +161,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 {
 	if(strncmp(sInfo, "give ", 5) == 0)
 	{
-		ExecuteCheatCommand(target, sInfo);
+		PSAPI_ExecuteCheatCommand(target, sInfo);
 	}
 	
 	return Plugin_Continue;
@@ -239,50 +238,6 @@ public void CreateSurvivorProducts()
 	PS_CreateProduct(-1, GetConVarInt(PointsOxy), "Oxygen Tank", NO_DESCRIPTION, "oxy oxygen", "give oxygentank", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	PS_CreateProduct(-1, GetConVarInt(PointsFireWorks), "Fireworks", NO_DESCRIPTION, "fworks fwork fireworks firework", "give fireworkcrate", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	PS_CreateProduct(-1, GetConVarInt(PointsGnome), "Gnome", NO_DESCRIPTION, "gnome", "give gnome", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-}
-stock void ExecuteCheatCommand(int client, const char[] command, any ...)
-{
-	char formattedCommand[256];
-	
-	VFormat(formattedCommand, sizeof(formattedCommand), command, 3);
-	RemoveFlags();
-	
-	FakeClientCommand(client, command);
-	
-	AddFlags();
-}
-void RemoveFlags()
-{
-	int flagsgive = GetCommandFlags("give");
-	int flagszspawnold = GetCommandFlags("z_spawn_old");
-	int flagszspawn = GetCommandFlags("z_spawn");
-	int flagsupgradeadd = GetCommandFlags("upgrade_add");
-	int flagspanic = GetCommandFlags("director_force_panic_event");
-	int flagsdumpents = GetCommandFlags("dumpentityfactories");
-	
-	SetCommandFlags("give", flagsgive & ~FCVAR_CHEAT);
-	SetCommandFlags("z_spawn_old", flagszspawnold & ~FCVAR_CHEAT);
-	SetCommandFlags("z_spawn", flagszspawn & ~FCVAR_CHEAT);
-	SetCommandFlags("upgrade_add", flagsupgradeadd & ~FCVAR_CHEAT);
-	SetCommandFlags("director_force_panic_event", flagspanic & ~FCVAR_CHEAT);
-	SetCommandFlags("dumpentityfactories", flagsdumpents & ~FCVAR_CHEAT);
-}	
-
-void AddFlags()
-{
-	int flagsgive = GetCommandFlags("give");
-	int flagszspawnold = GetCommandFlags("z_spawn_old");
-	int flagszspawn = GetCommandFlags("z_spawn");
-	int flagsupgradeadd = GetCommandFlags("upgrade_add");
-	int flagspanic = GetCommandFlags("director_force_panic_event");
-	int flagsdumpents = GetCommandFlags("dumpentityfactories");
-	
-	SetCommandFlags("give", flagsgive|FCVAR_CHEAT);
-	SetCommandFlags("z_spawn_old", flagszspawnold|FCVAR_CHEAT);
-	SetCommandFlags("z_spawn", flagszspawn|FCVAR_CHEAT);
-	SetCommandFlags("upgrade_add", flagsupgradeadd|FCVAR_CHEAT);
-	SetCommandFlags("director_force_panic_event", flagspanic|FCVAR_CHEAT);
-	SetCommandFlags("dumpentityfactories", flagsdumpents|FCVAR_CHEAT);
 }
 
 

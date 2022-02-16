@@ -96,46 +96,6 @@ public void CreateProducts()
 }
 
 
-stock void ExecuteCheatCommand(int client, const char[] command, any ...)
-{
-	char formattedCommand[256];
-	
-	VFormat(formattedCommand, sizeof(formattedCommand), command, 3);
-	RemoveFlags();
-	
-	FakeClientCommand(client, command);
-	
-	AddFlags();
-}
-void RemoveFlags()
-{
-	int flagsgive = GetCommandFlags("give");
-	int flagszspawnold = GetCommandFlags("z_spawn_old");
-	int flagszspawn = GetCommandFlags("z_spawn");
-	int flagsupgradeadd = GetCommandFlags("upgrade_add");
-	int flagspanic = GetCommandFlags("director_force_panic_event");
-	SetCommandFlags("give", flagsgive & ~FCVAR_CHEAT);
-	SetCommandFlags("z_spawn_old", flagszspawnold & ~FCVAR_CHEAT);
-	SetCommandFlags("z_spawn", flagszspawn & ~FCVAR_CHEAT);
-	SetCommandFlags("upgrade_add", flagsupgradeadd & ~FCVAR_CHEAT);
-	SetCommandFlags("director_force_panic_event", flagspanic & ~FCVAR_CHEAT);
-}	
-
-void AddFlags()
-{
-	int flagsgive = GetCommandFlags("give");
-	int flagszspawnold = GetCommandFlags("z_spawn_old");
-	int flagszspawn = GetCommandFlags("z_spawn");
-	int flagsupgradeadd = GetCommandFlags("upgrade_add");
-	int flagspanic = GetCommandFlags("director_force_panic_event");
-	SetCommandFlags("give", flagsgive|FCVAR_CHEAT);
-	SetCommandFlags("z_spawn_old", flagszspawnold|FCVAR_CHEAT);
-	SetCommandFlags("z_spawn", flagszspawn|FCVAR_CHEAT);
-	SetCommandFlags("upgrade_add", flagsupgradeadd|FCVAR_CHEAT);
-	SetCommandFlags("director_force_panic_event", flagspanic|FCVAR_CHEAT);
-}
-
-
 stock void SetPlayerAlive(int client, bool alive)
 {
 	if (alive) SetEntProp(client, Prop_Data, "m_isAlive", alive);

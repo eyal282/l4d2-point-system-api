@@ -111,20 +111,7 @@ Handle IIncap = INVALID_HANDLE;
 Handle IHurt = INVALID_HANDLE;
 Handle IKill = INVALID_HANDLE;
 //Infected buyables
-/*Handle PointsSuicide = INVALID_HANDLE;
-Handle PointsHunter = INVALID_HANDLE;
-Handle PointsJockey = INVALID_HANDLE;
-Handle PointsSmoker = INVALID_HANDLE;
-Handle PointsCharger = INVALID_HANDLE;
-Handle PointsBoomer = INVALID_HANDLE;
-Handle PointsSpitter = INVALID_HANDLE;
-Handle PointsIHeal = INVALID_HANDLE;
-Handle PointsWitch = INVALID_HANDLE;
-Handle PointsTank = INVALID_HANDLE;
-Handle PointsTankHealMult = INVALID_HANDLE;
-Handle PointsHorde = INVALID_HANDLE;
-Handle PointsMob = INVALID_HANDLE;
-Handle PointsUmob = INVALID_HANDLE;
+/*
 Handle PointsJmob = INVALID_HANDLE;
 Handle PointsGoggles = INVALID_HANDLE;
 Handle MaxWitchesAlive = INVALID_HANDLE;
@@ -150,8 +137,6 @@ Handle StartPoints = INVALID_HANDLE;
 //Handle BuyTankHealLimit = INVALID_HANDLE;
 //Handle HelpTimer = INVALID_HANDLE;
 //Handle HelpDelay = INVALID_HANDLE;
-Handle PisserTimer = INVALID_HANDLE;
-Handle WitchPisser = INVALID_HANDLE;
 
 bool g_bIsAreaStart = false;
 
@@ -315,7 +300,6 @@ public void OnMapStart()
 	PrecacheModel("models/infected/common_male_jimmy.mdl", true);
 	GetCurrentMap(MapName, sizeof(MapName));
 	g_bIsAreaStart = false;
-	PisserTimer = INVALID_HANDLE;
 }	
 
 
@@ -401,7 +385,15 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public any Native_CreateCategory(Handle plugin, int numParams)
 {
-	return true;
+	enCategory cat;	
+	
+	GetNativeString(1, cat.sID, sizeof(enCategory::sID));
+	GetNativeString(2, cat.sName, sizeof(enCategory::sName));
+	cat.iBuyFlags = GetNativeCell(3);
+	
+	DeleteCategoryByID(cat.sID);
+	
+	return PushArrayArray(g_aCategories, cat);
 }
 
 public any Native_CreateProduct(Handle plugin, int numParams)
@@ -535,64 +527,6 @@ public Action Event_PlayerLeftStartArea(Handle event, const char[] name, bool do
 	return Plugin_Continue;
 }
 
-public Action PissAWitch(Handle hTimer)
-{
-	int MaxEntities = GetEntityCount();
-	
-	int WitchArray[100], pos, PlayersArray[MAXPLAYERS+1], PlayersPos;
-
-	
-	char Classname[11];
-	for(int i=0;i < MaxEntities;i++)
-	{
-		if(!IsValidEdict(i))
-			continue;
-		
-		GetEdictClassname(i, Classname, sizeof(Classname));
-		
-		if(StrEqual(Classname, "witch", true))
-		{
-			WitchArray[pos] = i;
-			pos++;
-		}
-	}	
-	
-	if(pos > 0)
-	{
-		for(int i=1;i <= MaxClients;i++)
-		{
-			if(!IsClientInGame(i))
-				continue;
-				
-			else if(!IsPlayerAlive(i))
-				continue;
-			
-			else if (IsFakeClient(i)) // Bots do not trigger the witch.
-				continue;
-				
-			else if(GetClientTeam(i) != view_as<int>(L4DTeam_Survivor))
-				continue;
-				
-			PlayersArray[PlayersPos] = i;
-			PlayersPos++;
-		}
-		if(PlayersPos > 0)
-		{
-			int attacker = PlayersArray[GetRandomInt(0, PlayersPos-1)];
-			int victim = WitchArray[GetRandomInt(0, pos-1)];
-			
-			int inflictor = GetPlayerWeaponSlot(attacker, 1);
-			
-			if(inflictor == -1) inflictor = attacker;
-			
-			SetEntPropFloat(victim, Prop_Send, "m_rage", 10000.0);
-			SetEntPropFloat(victim, Prop_Send, "m_wanderrage", 10000.0);
-			SDKHooks_TakeDamage(victim, inflictor, attacker, 1.0, DMG_GENERIC);
-		}
-	}
-	return Plugin_Continue;
-}	
-
 public void OnClientDisconnect(int client)
 {
 	if(IsFakeClient(client)) return;
@@ -669,21 +603,10 @@ public Action Event_REnd(Handle event, char[] event_name, bool dontBroadcast)
 				
 		}
 	}
-	RequestFrame(WipeThemAll, 0);
-	
-	if(PisserTimer != INVALID_HANDLE)
-	{
-		CloseHandle(PisserTimer);
-		PisserTimer = INVALID_HANDLE;
-	}
 	
 	return Plugin_Continue;
 }	
 
-public void WipeThemAll(int zero)
-{
-	WipeAllInfected();
-}	
 	
 public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 {
@@ -710,14 +633,6 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 	ResetProductCooldowns();
 	
 	CreateTimer(5.0, HelpMessage);
-	
-	if(PisserTimer != INVALID_HANDLE)
-	{
-		CloseHandle(PisserTimer);
-		PisserTimer = INVALID_HANDLE;
-	}
-
-	PisserTimer = CreateTimer(GetConVarFloat(WitchPisser), PissAWitch, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
 	
 	return Plugin_Continue;
 }	
@@ -1095,6 +1010,11 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 
 public Action BuyMenu(int client, int args)
 {
+	if(!L4D_HasAnySurvivorLeftSafeAreaStock())
+	{
+		PrintToChat(client, "\x04[PS]\x03 Waiting for Survivors ...");
+		return Plugin_Handled;
+	}
 	if(IsAllowedGameMode() && GetConVarInt(Enable) == 1 && IsClientInGame(client) && IsClientConnected(client) && GetClientTeam(client) > 1 && args == 0)
 	{
 		BuildBuyMenu(client);
@@ -1655,47 +1575,6 @@ public Action Command_SendPoints(int client, int args)
 	return Plugin_Handled;
 }
 
-
-void RemoveFlags()
-{
-	int flagsgive = GetCommandFlags("give");
-	int flagszspawnold = GetCommandFlags("z_spawn_old");
-	int flagszspawn = GetCommandFlags("z_spawn");
-	int flagsupgradeadd = GetCommandFlags("upgrade_add");
-	int flagspanic = GetCommandFlags("director_force_panic_event");
-	SetCommandFlags("give", flagsgive & ~FCVAR_CHEAT);
-	SetCommandFlags("z_spawn_old", flagszspawnold & ~FCVAR_CHEAT);
-	SetCommandFlags("z_spawn", flagszspawn & ~FCVAR_CHEAT);
-	SetCommandFlags("upgrade_add", flagsupgradeadd & ~FCVAR_CHEAT);
-	SetCommandFlags("director_force_panic_event", flagspanic & ~FCVAR_CHEAT);
-}	
-
-void AddFlags()
-{
-	int flagsgive = GetCommandFlags("give");
-	int flagszspawnold = GetCommandFlags("z_spawn_old");
-	int flagszspawn = GetCommandFlags("z_spawn");
-	int flagsupgradeadd = GetCommandFlags("upgrade_add");
-	int flagspanic = GetCommandFlags("director_force_panic_event");
-	SetCommandFlags("give", flagsgive|FCVAR_CHEAT);
-	SetCommandFlags("z_spawn_old", flagszspawnold|FCVAR_CHEAT);
-	SetCommandFlags("z_spawn", flagszspawn|FCVAR_CHEAT);
-	SetCommandFlags("upgrade_add", flagsupgradeadd|FCVAR_CHEAT);
-	SetCommandFlags("director_force_panic_event", flagspanic|FCVAR_CHEAT);
-}
-
-stock void ExecuteCheatCommand(int client, const char[] command, any ...)
-{
-	char formattedCommand[256];
-	
-	VFormat(formattedCommand, sizeof(formattedCommand), command, 3);
-	RemoveFlags();
-	
-	FakeClientCommand(client, command);
-	
-	AddFlags();
-}
-
 void BuildBuyMenu(int client)
 {
 	if(client)
@@ -1798,12 +1677,12 @@ stock void ExecuteFullHeal(int client)
 		}	
 		else if(bIncap)
 		{
-			ExecuteCheatCommand(client, "give health");
+			PSAPI_ExecuteCheatCommand(client, "give health");
 			SetEntityHealthToMax(client);
 		}
 		else
 		{
-			ExecuteCheatCommand(client, "give health");
+			PSAPI_ExecuteCheatCommand(client, "give health");
 			SetEntityHealthToMax(client);
 		}
 	}
@@ -2191,6 +2070,25 @@ stock void DeleteProductsByAliases(char[] sAliases)
 					i--;
 				}
 			}
+		}
+	}
+}
+
+
+stock void DeleteCategoryByID(char[] sID)
+{	
+	// i can be decremented, mustn't use int iSize = GetArraySize(g_aProducts)
+	for (int i = 0; i < GetArraySize(g_aCategories);i++)
+	{
+		enCategory cat;
+		GetArrayArray(g_aCategories, i, cat);
+		
+		if(StrEqual(cat.sID, sID, false))
+		{
+			RemoveFromArray(g_aCategories, i);
+			
+			// re-do the item in loop of "i".
+			i--;
 		}
 	}
 }
