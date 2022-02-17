@@ -20,13 +20,14 @@ public Plugin myinfo =
 	url = ""
 };
 
-ConVar g_cvTankHealAmount;
+ConVar g_hHealCost
+ConVar g_hTankHealAmount;
 
 public void OnPluginStart()
 {
 	CreateProducts();
 	
-	g_cvTankHealAmount = CreateConVar("l4d2_points_tank_heal_amount", "3200"); // Amount of HP a tank heals per !buy heal.
+	g_hTankHealAmount = CreateConVar("l4d2_points_tank_heal_amount", "3200"); // Amount of HP a tank heals per !buy heal.
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -55,7 +56,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 		{
 			int iMissingHealth = GetEntityMaxHealth(target) - GetEntityHealth(target);
 			
-			iCost *= RoundToCeil(float(iMissingHealth) / float(GetConVarInt(g_cvTankHealAmount)));
+			iCost *= RoundToCeil(float(iMissingHealth) / float(GetConVarInt(g_hTankHealAmount)));
 		}
 	}
 	
@@ -78,7 +79,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 			PS_FullHeal(target);
 			
 		else
-			HealEntity(target, GetConVarInt(g_cvTankHealAmount));
+			HealEntity(target, GetConVarInt(g_hTankHealAmount));
 	}
 	
 	return Plugin_Continue;
@@ -87,12 +88,12 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 public void CreateProducts()
 {
 
+	int iCategory = PS_CreateCategory("health items", "Health Items", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE)
+	PS_CreateProduct(-1, g_hHealCost.IntValue, "Heal", "Heals you to max health\nTanks gain less health", "heal", "Partial Heal", 0.0, 0.0,
+	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
 	
-	PS_CreateProduct(-1, 100, "Heal", "Heals you to max health\nTanks gain less health", "heal", "Partial Heal", 0.0, 0.0,
-	BUYFLAG_INFECTED | BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
-	
-	PS_CreateProduct(-1, 100, "Full Heal", "Heals you to max health\nTanks buy this over and over until full health", "fheal fullheal", "Full Heal", 0.0, 0.0,
-	BUYFLAG_INFECTED | BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
+	PS_CreateProduct(-1, g_hHealCost.IntValue, "Full Heal", "Heals you to max health\nFor tanks, as if they spam !buy heal", "fheal fullheal", "Full Heal", 0.0, 0.0,
+	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
 }
 
 
