@@ -3,7 +3,6 @@
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
-#include <left4dhooks>
 #include <ps_api>
 
 #pragma semicolon 1
@@ -20,14 +19,30 @@ public Plugin myinfo =
 	url = ""
 };
 
-ConVar g_hHealCost
+ConVar g_hHealCost;
 ConVar g_hTankHealAmount;
+ConVar g_hTankHealPercent;
 
 public void OnPluginStart()
-{
+{	
+	AutoExecConfig_SetFile("PointSystemAPI");
+	
+	g_hHealCost = AutoExecConfig_CreateConVar("l4d2_points_full_heal", "15", "How many points a complete heal costs");
+	g_hTankHealAmount = AutoExecConfig_CreateConVar("l4d2_points_tank_heal_amount", "0", "Amount of HP a tank will heal instead of a full heal when buying a heal.");
+	g_hTankHealPercent = AutoExecConfig_CreateConVar("l4d2_points_tank_heal_percent", "20.0", "Percentage of HP a tank will heal instead of a full heal when buying a heal", _, true, 0.0, true, 100.0);
+	
 	CreateProducts();
 	
-	g_hTankHealAmount = CreateConVar("l4d2_points_tank_heal_amount", "3200"); // Amount of HP a tank heals per !buy heal.
+	// This makes an internal call to AutoExecConfig with the given configfile
+	AutoExecConfig_ExecuteFile();
+
+	// Cleaning should be done at the end
+	AutoExecConfig_CleanFile();
+}
+
+public void OnConfigsExecuted()
+{
+	CreateProducts();
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -54,9 +69,11 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 	{
 		if(GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank)
 		{
+			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
+			
 			int iMissingHealth = GetEntityMaxHealth(target) - GetEntityHealth(target);
 			
-			iCost *= RoundToCeil(float(iMissingHealth) / float(GetConVarInt(g_hTankHealAmount)));
+			iCost *= RoundToCeil(float(iMissingHealth) / float(iAmountToHeal));
 		}
 	}
 	
@@ -79,7 +96,11 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 			PS_FullHeal(target);
 			
 		else
-			HealEntity(target, GetConVarInt(g_hTankHealAmount));
+		{
+			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
+			
+			HealEntity(target, iAmountToHeal);
+		}
 	}
 	
 	return Plugin_Continue;
@@ -88,11 +109,11 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 public void CreateProducts()
 {
 
-	int iCategory = PS_CreateCategory("health items", "Health Items", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE)
-	PS_CreateProduct(-1, g_hHealCost.IntValue, "Heal", "Heals you to max health\nTanks gain less health", "heal", "Partial Heal", 0.0, 0.0,
+	int iCategory = PS_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE);
+	PS_CreateProduct(iCategory, g_hHealCost.IntValue, "Heal", "Heals you to max health\nTanks gain less health", "heal", "Partial Heal", 0.0, 0.0,
 	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
 	
-	PS_CreateProduct(-1, g_hHealCost.IntValue, "Full Heal", "Heals you to max health\nFor tanks, as if they spam !buy heal", "fheal fullheal", "Full Heal", 0.0, 0.0,
+	PS_CreateProduct(iCategory, g_hHealCost.IntValue, "Full Heal", "Heals you to max health\nFor tanks, as if they spam !buy heal", "fheal fullheal", "Full Heal", 0.0, 0.0,
 	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
 }
 

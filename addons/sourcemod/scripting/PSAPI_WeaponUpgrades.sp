@@ -3,7 +3,6 @@
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
-#include <left4dhooks>
 #include <ps_api>
 
 #pragma semicolon 1
@@ -27,10 +26,23 @@ ConVar g_cvLaserPointerCost;
 
 public void OnPluginStart()
 {	
-	g_cvExplosiveAmmoCost = CreateConVar("l4d2_points_exammo_cost", "35");
-	g_cvIncendiaryAmmoCost = CreateConVar("l4d2_points_incammo_cost", "15");
-	g_cvLaserPointerCost = CreateConVar("l4d2_points_laser_pointer_cost", "0");
+	AutoExecConfig_SetFile("PointSystemAPI");
 	
+	g_cvExplosiveAmmoCost = AutoExecConfig_CreateConVar("l4d2_points_exammo_cost", "35");
+	g_cvIncendiaryAmmoCost = AutoExecConfig_CreateConVar("l4d2_points_incammo_cost", "15");
+	g_cvLaserPointerCost = AutoExecConfig_CreateConVar("l4d2_points_laser_pointer_cost", "0");
+	
+	CreateProducts();
+	
+	// This makes an internal call to AutoExecConfig with the given configfile
+	AutoExecConfig_ExecuteFile();
+
+	// Cleaning should be done at the end
+	AutoExecConfig_CleanFile();
+}
+
+public void OnConfigsExecuted()
+{
 	CreateProducts();
 }
 
@@ -56,14 +68,16 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 public void CreateProducts()
 {
-	PS_CreateProduct(-1, GetConVarInt(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "exammo expammo", "upgrade_add EXPLOSIVE_AMMO", 0.0, 0.0,
-	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_TEAM);	
+	int iCategory = PS_CreateCategory(-1, "weapon upgrades", "Weapon Upgrades", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE);
 	
-	PS_CreateProduct(-1, GetConVarInt(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add INCENDIARY_AMMO", 0.0, 0.0,
-	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_BOTTEAM);	
+	PS_CreateProduct(iCategory, GetConVarInt(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "exammo expammo", "upgrade_add EXPLOSIVE_AMMO", 0.0, 0.0,
+	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);	
 	
-	PS_CreateProduct(-1, GetConVarInt(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add LASER_SIGHT", 0.0, 0.0,
-	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_BOTTEAM);	
+	PS_CreateProduct(iCategory, GetConVarInt(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add INCENDIARY_AMMO", 0.0, 0.0,
+	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_BOTTEAM);	
+	
+	PS_CreateProduct(iCategory, GetConVarInt(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add LASER_SIGHT", 0.0, 0.0,
+	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_BOTTEAM);	
 }
 
 stock void SetPlayerAlive(int client, bool alive)

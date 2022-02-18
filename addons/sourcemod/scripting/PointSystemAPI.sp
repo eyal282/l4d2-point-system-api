@@ -6,38 +6,10 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
-#include <left4dhooks>
 #include <ps_api>
 
 #pragma newdecls required
 #define PLUGIN_TITLE	"Point System API"
-
-//char g_sBossClasses[][]={"","smoker","boomer","hunter","spitter","jockey","charger","witch","tank","survivor"};
-char g_sBossNames[][]={"","Smoker","Boomer","Hunter","Spitter","Jockey","Charger","Witch","Tank","Survivor"};
-
-
-enum struct enCategory
-{
-	char sID[64]; // Identifier between plugins, players cannot see this.
-	char sName[64]; // Category Name
-	int iBuyFlags; // Must use variable that determines flags that specify when you can buy. BUYFLAG_* in ps_api.inc
-}
-
-enum struct enProduct
-{
-	int iCategory; // Category number this product belongs to, or -1 for main buy menu.
-	int iCost; // Cost of this product.
-	int iBuyFlags; // Must use variable that determines flags that specify when you can buy. BUYFLAG_* in ps_api.inc
-	char sName[64]; // Product Name
-	char sDescription[128]; // Optional Description
-	char sAliases[256]; // Alises, seperated by spaces, to buy directly with !buy <alias>
-	char sInfo[64]; // Info that only devs can see.
-
-	float fDelay; // Delay between purchase to obtaining the product.
-	float fCooldown; // Cooldown between purchases.
-	
-	float NextBuyProduct[MAXPLAYERS + 1]; // Next time each player can buy this product.
-}
 
 ArrayList g_aCategories, g_aProducts;
 
@@ -110,6 +82,7 @@ Handle ITag = INVALID_HANDLE;
 Handle IIncap = INVALID_HANDLE;
 Handle IHurt = INVALID_HANDLE;
 Handle IKill = INVALID_HANDLE;
+Handle IKarma = INVALID_HANDLE;
 //Infected buyables
 /*
 Handle PointsJmob = INVALID_HANDLE;
@@ -168,38 +141,48 @@ public void OnPluginStart()
 		SetFailState("This plugin only supports Left 4 Dead 2");
 	}	
 	LoadTranslations("common.phrases");
-	StartPoints = CreateConVar("l4d2_points_start", "200", "Points to start each round/map with.");
-	Notifications = CreateConVar("l4d2_points_notify", "1", "Show messages when points are earned?");
-	Enable = CreateConVar("l4d2_points_enable", "1", "Enable Point System?");
-	Modes = CreateConVar("l4d2_points_modes", "coop,realism,versus,teamversus", "Which game modes to use Point System");
-	ResetPoints = CreateConVar("l4d2_points_reset_mapchange", "versus,teamversus", "Which game modes to reset point count on round end and round start");
-	SValueKillingSpree = CreateConVar("l4d2_points_cikill_value", "2", "How many points does killing a certain amount of infected earn");
-	SNumberKill = CreateConVar("l4d2_points_cikills", "25", "How many kills you need to earn a killing spree bounty");
-	SValueHeadSpree = CreateConVar("l4d2_points_headshots_value", "4", "How many points does killing a certain amount of infected with headshots earn");
-	SNumberHead = CreateConVar("l4d2_points_headshots", "20", "How many kills you need to earn a killing spree bounty");
-	SSIKill = CreateConVar("l4d2_points_sikill", "1", "How many points does killing a special infected earn");
-	STankKill = CreateConVar("l4d2_points_tankkill", "2", "How many points does killing a tank earn");
-	SWitchKill = CreateConVar("l4d2_points_witchkill", "4", "How many points does killing a witch earn");
-	SWitchCrown = CreateConVar("l4d2_points_witchcrown", "2", "How many points does crowning a witch earn");
-	SHeal = CreateConVar("l4d2_points_heal", "5", "How many points does healing a team mate earn");
-	SProtect = CreateConVar("l4d2_points_protect", "1", "How many points does protecting a team mate earn");
-	SHealWarning = CreateConVar("l4d2_points_heal_warning", "1", "How many points does healing a team mate who did not need healing earn");
-	SRevive = CreateConVar("l4d2_points_revive", "3", "How many points does reviving a team mate earn");
-	SLedge = CreateConVar("l4d2_points_ledge", "1", "How many points does reviving a hanging team mate earn");
-	SDefib = CreateConVar("l4d2_points_defib_action", "5", "How many points does defibbing a team mate earn");
-	STBurn = CreateConVar("l4d2_points_tankburn", "2", "How many points does burning a tank earn");
-	STSolo = CreateConVar("l4d2_points_tanksolo", "8", "How many points does killing a tank single-handedly earn");
-	SWBurn = CreateConVar("l4d2_points_witchburn", "1", "How many points does burning a witch earn");
-	STag = CreateConVar("l4d2_points_bile_tank", "2", "How many points does biling a tank earn");
-	IChoke = CreateConVar("l4d2_points_smoke", "2", "How many points does smoking a survivor earn");
-	IPounce = CreateConVar("l4d2_points_pounce", "1", "How many points does pouncing a survivor earn");
-	ICarry = CreateConVar("l4d2_points_charge", "2", "How many points does charging a survivor earn");
-	IImpact = CreateConVar("l4d2_points_impact", "1", "How many points does impacting a survivor earn");
-	IRide = CreateConVar("l4d2_points_ride", "2", "How many points does riding a survivor earn");
-	ITag = CreateConVar("l4d2_points_boom", "1", "How many points does booming a survivor earn");
-	IIncap = CreateConVar("l4d2_points_incap", "3", "How many points does incapping a survivor earn");
-	IHurt = CreateConVar("l4d2_points_damage", "2", "How many points does doing damage earn");
-	IKill = CreateConVar("l4d2_points_kill", "5", "How many points does killing a survivor earn");
+	
+	AutoExecConfig_SetFile("PointSystemAPI");
+	
+	StartPoints = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
+	Notifications = AutoExecConfig_CreateConVar("l4d2_points_notify", "1", "Show messages when points are earned?");
+	Enable = AutoExecConfig_CreateConVar("l4d2_points_enable", "1", "Enable Point System?");
+	Modes = AutoExecConfig_CreateConVar("l4d2_points_modes", "coop,realism,versus,teamversus", "Which game modes to use Point System");
+	ResetPoints = AutoExecConfig_CreateConVar("l4d2_points_reset_mapchange", "versus,teamversus", "Which game modes to reset point count on round end and round start");
+	SValueKillingSpree = AutoExecConfig_CreateConVar("l4d2_points_cikill_value", "2", "How many points does killing a certain amount of infected earn");
+	SNumberKill = AutoExecConfig_CreateConVar("l4d2_points_cikills", "25", "How many kills you need to earn a killing spree bounty");
+	SValueHeadSpree = AutoExecConfig_CreateConVar("l4d2_points_headshots_value", "4", "How many points does killing a certain amount of infected with headshots earn");
+	SNumberHead = AutoExecConfig_CreateConVar("l4d2_points_headshots", "20", "How many kills you need to earn a killing spree bounty");
+	SSIKill = AutoExecConfig_CreateConVar("l4d2_points_sikill", "1", "How many points does killing a special infected earn");
+	STankKill = AutoExecConfig_CreateConVar("l4d2_points_tankkill", "2", "How many points does killing a tank earn");
+	SWitchKill = AutoExecConfig_CreateConVar("l4d2_points_witchkill", "4", "How many points does killing a witch earn");
+	SWitchCrown = AutoExecConfig_CreateConVar("l4d2_points_witchcrown", "2", "How many points does crowning a witch earn");
+	SHeal = AutoExecConfig_CreateConVar("l4d2_points_heal", "5", "How many points does healing a team mate earn");
+	SProtect = AutoExecConfig_CreateConVar("l4d2_points_protect", "1", "How many points does protecting a team mate earn");
+	SHealWarning = AutoExecConfig_CreateConVar("l4d2_points_heal_warning", "1", "How many points does healing a team mate who did not need healing earn");
+	SRevive = AutoExecConfig_CreateConVar("l4d2_points_revive", "3", "How many points does reviving a team mate earn");
+	SLedge = AutoExecConfig_CreateConVar("l4d2_points_ledge", "1", "How many points does reviving a hanging team mate earn");
+	SDefib = AutoExecConfig_CreateConVar("l4d2_points_defib_action", "5", "How many points does defibbing a team mate earn");
+	STBurn = AutoExecConfig_CreateConVar("l4d2_points_tankburn", "2", "How many points does burning a tank earn");
+	STSolo = AutoExecConfig_CreateConVar("l4d2_points_tanksolo", "8", "How many points does killing a tank single-handedly earn");
+	SWBurn = AutoExecConfig_CreateConVar("l4d2_points_witchburn", "1", "How many points does burning a witch earn");
+	STag = AutoExecConfig_CreateConVar("l4d2_points_bile_tank", "2", "How many points does biling a tank earn");
+	IChoke = AutoExecConfig_CreateConVar("l4d2_points_smoke", "2", "How many points does smoking a survivor earn");
+	IPounce = AutoExecConfig_CreateConVar("l4d2_points_pounce", "1", "How many points does pouncing a survivor earn");
+	ICarry = AutoExecConfig_CreateConVar("l4d2_points_charge", "2", "How many points does charging a survivor earn");
+	IImpact = AutoExecConfig_CreateConVar("l4d2_points_impact", "1", "How many points does impacting a survivor earn");
+	IRide = AutoExecConfig_CreateConVar("l4d2_points_ride", "2", "How many points does riding a survivor earn");
+	ITag = AutoExecConfig_CreateConVar("l4d2_points_boom", "1", "How many points does booming a survivor earn");
+	IIncap = AutoExecConfig_CreateConVar("l4d2_points_incap", "3", "How many points does incapping a survivor earn");
+	IHurt = AutoExecConfig_CreateConVar("l4d2_points_damage", "2", "How many points does doing damage earn");
+	IKill = AutoExecConfig_CreateConVar("l4d2_points_kill", "5", "How many points does killing a survivor earn");
+	IKarma = AutoExecConfig_CreateConVar("l4d2_points_karma", "5", "How many points does registering a karma event earn");
+	
+	// This makes an internal call to AutoExecConfig with the given configfile
+	AutoExecConfig_ExecuteFile();
+
+	// Cleaning should be done at the end
+	AutoExecConfig_CleanFile();
 	
 	RegConsoleCmd("sm_buystuff", BuyMenu);
 	RegConsoleCmd("sm_buy", BuyMenu);
@@ -235,17 +218,18 @@ public void OnPluginStart()
 	HookEvent("zombie_ignited", Event_Burn);
 	HookEvent("round_end", Event_REnd);
 	HookEvent("round_start", Event_RStart);
-	HookEvent("versus_round_start", Event_VSRStart);
 	HookEvent("finale_win", Event_Finale);
 	HookEvent ("player_team", Event_ChangeTeam, EventHookMode_Pre);
 	HookEvent("player_left_start_area", Event_PlayerLeftStartArea, EventHookMode_Post);
+	
+	AutoExecConfig(true, "PointSystemAPI");
 	//AutoExecConfig(true, "l4d2_points_system");
 }
 
 // Global Forward
 public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName)
 {
-	int Points = 75;
+	int Points = GetConVarInt(IKarma);
 	
 	points[attacker] += Points;
 	
@@ -326,49 +310,6 @@ void WipeAllInfected()
 	}
 }
 
-
-public Action HelpMessage(Handle Timer, any client)
-{
-	for(int i=1;i <= MaxClients;i++)
-	{
-		if(!IsClientInGame(i))
-			continue;
-		
-		else if(IsFakeClient(i))
-			continue;
-			
-		if(IsTeamSurvivor(i))
-			PrintHintText(i, "Recommended products to buy for human:\n!buy spas | !buy molly | !buy katana | !buy exammo | !buy fheal");
-			
-		else if(IsTeamInfected(i))
-			PrintHintText(i, "Recommended products to buy for infected:\n!buy horde | !buy witch | !buy charger | !buy tank");
-			
-		PrintToChat(i, "Use \x03!suggest\x01 if you think you know how to improve the server!");
-	}
-	return Plugin_Continue;
-}
-
-
-public Action Event_VSRStart(Handle event, char[] event_name, bool dontBroadcast)
-{
-	for(int i=1;i <= MaxClients;i++)
-	{
-		if(!IsClientInGame(i))
-			continue;
-		
-		else if(IsFakeClient(i))
-			continue;
-			
-		if(IsTeamSurvivor(i))
-			PrintHintText(i, "Recommended products to buy for human:\n!buy spas | !buy molly | !buy katana | !buy exammo | !buy fheal");
-			
-		else if(IsTeamInfected(i))
-			PrintHintText(i, "Recommended products to buy for infected:\n!buy horde | !buy witch | !buy charger | !buy tank");
-	}
-	
-	return Plugin_Continue;
-}
-
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	CreateNative("PS_CreateCategory", Native_CreateCategory);
@@ -387,13 +328,21 @@ public any Native_CreateCategory(Handle plugin, int numParams)
 {
 	enCategory cat;	
 	
-	GetNativeString(1, cat.sID, sizeof(enCategory::sID));
-	GetNativeString(2, cat.sName, sizeof(enCategory::sName));
-	cat.iBuyFlags = GetNativeCell(3);
+	cat.iCategory = GetNativeCell(1);
+	GetNativeString(2, cat.sID, sizeof(enCategory::sID));
+	GetNativeString(3, cat.sName, sizeof(enCategory::sName));
+	cat.iBuyFlags = GetNativeCell(4);
 	
-	DeleteCategoryByID(cat.sID);
+	int iCategory = FindCategoryByIdentifier(cat.sID);
 	
-	return PushArrayArray(g_aCategories, cat);
+	if(iCategory == -1)
+		return PushArrayArray(g_aCategories, cat);
+		
+	else
+	{
+		SetArrayArray(g_aCategories, iCategory, cat);
+		return iCategory;
+	}
 }
 
 public any Native_CreateProduct(Handle plugin, int numParams)
@@ -518,7 +467,7 @@ public Action Event_PlayerLeftStartArea(Handle event, const char[] name, bool do
 {
 	int client = GetClientOfUserId(GetEventInt(event, "userid"));
 	
-	if ( IsValidClient( client ) && IsPlayerAlive( client ) && IsInTeam( client, L4DTeam_Survivor ))
+	if ( client != 0 && IsPlayerAlive( client ) && IsInTeam( client, L4DTeam_Survivor ))
 	{
 		g_bIsAreaStart = true;
 		CreateTimer(0.1, CheckMultipleDamage, 0, TIMER_REPEAT);
@@ -632,8 +581,6 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 	
 	ResetProductCooldowns();
 	
-	CreateTimer(5.0, HelpMessage);
-	
 	return Plugin_Continue;
 }	
 
@@ -718,14 +665,14 @@ public Action Event_Death(Handle event, const char[] name, bool dontBroadcast)
 	{
 		if(GetClientTeam(attacker) == 2)
 		{
-			if(GetConVarInt(SSIKill) == -1 || GetClientTeam(client) == 2) return Plugin_Continue;
+			if(GetConVarInt(SSIKill) <= 0 || GetClientTeam(client) == 2) return Plugin_Continue;
 			if(GetEntProp(client, Prop_Send, "m_zombieClass") == 8) return Plugin_Continue;
 			points[attacker] += GetConVarInt(SSIKill);
 			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(SSIKill), points[attacker]);
 		}
 		if(GetClientTeam(attacker) == 3)
 		{
-			if(GetConVarInt(IKill) == -1 || GetClientTeam(client) == 3) return Plugin_Continue;
+			if(GetConVarInt(IKill) <= 0 || GetClientTeam(client) == 3) return Plugin_Continue;
 			points[attacker] += GetConVarInt(IKill);
 			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(IKill), points[attacker]);
 		}	
@@ -766,7 +713,7 @@ public Action Event_WitchDeath(Handle event, const char[] name, bool dontBroadca
 	CLIENT
 	CCHECK2
 	{
-		if(GetConVarInt(SWitchKill) == -1) return Plugin_Continue;
+		if(GetConVarInt(SWitchKill) <= 0) return Plugin_Continue;
 		points[client] += GetConVarInt(SWitchKill);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Killed Witch + \x05%d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SWitchKill), points[client]);
 		if(oneshot && GetConVarInt(SWitchCrown) > 0)
@@ -791,7 +738,7 @@ public Action Event_Heal(Handle event, const char[] name, bool dontBroadcast)
 		if(client == subject) return Plugin_Continue;
 		if(restored > 39)
 		{
-			if(GetConVarInt(SHeal) == -1) return Plugin_Continue;
+			if(GetConVarInt(SHeal) <= 0) return Plugin_Continue;
 			points[client] += GetConVarInt(SHeal);
 			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Healed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SHeal), points[client]);
 		}
@@ -799,7 +746,7 @@ public Action Event_Heal(Handle event, const char[] name, bool dontBroadcast)
 		{
 			if(GetConVarInt(SHealWarning) <= 0) return Plugin_Continue;
 			points[client] += GetConVarInt(SHealWarning);
-			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Don't Harvest Heal Points!", GetConVarInt(SHealWarning));
+			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Don't Harvest Heal Points\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SHealWarning));
 		}
 	}
 		
@@ -809,10 +756,10 @@ public Action Event_Heal(Handle event, const char[] name, bool dontBroadcast)
 public Action Event_Protect(Handle event, const char[] name, bool dontBroadcast)
 {
 	CLIENT
-	int award = GetClientOfUserId(GetEventInt(event, "userid"));
-	if(client > 0 && award == 67 && GetConVarInt(SProtect) > 0 && IsClientInGame(client) && IsClientConnected(client) && GetClientTeam(client) > 1 && !IsFakeClient(client) && IsAllowedGameMode())
+	int award = GetEventInt(event, "award");
+	if(client > 0 && award == 67 && IsClientInGame(client) && IsClientConnected(client) && GetClientTeam(client) > 1 && !IsFakeClient(client) && IsAllowedGameMode())
 	{
-		if(GetConVarInt(SProtect) == -1) return Plugin_Continue;
+		if(GetConVarInt(SProtect) <= 0) return Plugin_Continue;
 		protectcount[client]++;
 		if(protectcount[client] == 6)
 		{
@@ -854,7 +801,7 @@ public Action Event_Shock(Handle event, const char[] name, bool dontBroadcast)
 	CLIENT
 	CCHECK2
 	{
-		if(GetConVarInt(SDefib) == -1) return Plugin_Continue;
+		if(GetConVarInt(SDefib) <= 0) return Plugin_Continue;
 		points[client] += GetConVarInt(SDefib);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Defibbed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SDefib), points[client]);
 	}	
@@ -867,7 +814,7 @@ public Action Event_Choke(Handle event, const char[] name, bool dontBroadcast)
 	CLIENT
 	CCHECK3
 	{
-		if(GetConVarInt(IChoke) == -1) return Plugin_Continue;
+		if(GetConVarInt(IChoke) <= 0) return Plugin_Continue;
 		points[client] += GetConVarInt(IChoke);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Choked Survivor\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IChoke), points[client]);
 	}
@@ -902,7 +849,7 @@ public Action Event_Pounce(Handle event, const char[] name, bool dontBroadcast)
 	CLIENT
 	CCHECK3
 	{
-		if(GetConVarInt(IPounce) == -1) return Plugin_Continue;
+		if(GetConVarInt(IPounce) <= 0) return Plugin_Continue;
 		points[client] += GetConVarInt(IPounce);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Pounced Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IPounce), points[client]);
 	}
@@ -915,7 +862,7 @@ public Action Event_Ride(Handle event, const char[] name, bool dontBroadcast)
 	CLIENT
 	CCHECK3
 	{
-		if(GetConVarInt(IRide) == -1) return Plugin_Continue;
+		if(GetConVarInt(IRide) <= 0) return Plugin_Continue;
 		points[client] += GetConVarInt(IRide);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Jockeyed Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IRide), points[client]);
 	}
@@ -928,7 +875,7 @@ public Action Event_Carry(Handle event, const char[] name, bool dontBroadcast)
 	CLIENT
 	CCHECK3
 	{
-		if(GetConVarInt(ICarry) == -1) return Plugin_Continue;
+		if(GetConVarInt(ICarry) <= 0) return Plugin_Continue;
 		points[client] += GetConVarInt(ICarry);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Charged Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(ICarry), points[client]);
 	}
@@ -941,7 +888,7 @@ public Action Event_Impact(Handle event, const char[] name, bool dontBroadcast)
 	CLIENT
 	CCHECK3
 	{
-		if(GetConVarInt(IImpact) == -1) return Plugin_Continue;
+		if(GetConVarInt(IImpact) <= 0) return Plugin_Continue;
 		points[client] += GetConVarInt(IImpact);
 		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Impacted Survivor \x05+ %d\x03 points(Σ: \x05%d\x03)", GetConVarInt(IImpact), points[client]);
 	}
@@ -1010,7 +957,7 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 
 public Action BuyMenu(int client, int args)
 {
-	if(!L4D_HasAnySurvivorLeftSafeAreaStock())
+	if(!L4D_HasAnySurvivorLeftSafeAreaStock() && GetClientTeam(client) == view_as<int>(L4DTeam_Infected))
 	{
 		PrintToChat(client, "\x04[PS]\x03 Waiting for Survivors ...");
 		return Plugin_Handled;
@@ -1097,7 +1044,7 @@ public Action Command_Heal(int client, int args)
 			client,
 			target_list,
 			MAXPLAYERS,
-			COMMAND_FILTER_ALIVE,
+			COMMAND_FILTER_ALIVE|COMMAND_FILTER_NO_IMMUNITY,
 			target_name,
 			sizeof(target_name),
 			tn_is_ml)) <= 0)
@@ -1575,18 +1522,120 @@ public Action Command_SendPoints(int client, int args)
 	return Plugin_Handled;
 }
 
-void BuildBuyMenu(int client)
-{
-	if(client)
-		return;
-}	
-	
 
-bool IsValidClient(int iClient)
+void BuildBuyMenu(int client, int iCategory = -1)
 {
-	if ( iClient < 1 || iClient > MaxClients ) return false;
-	if ( !IsClientConnected( iClient )) return false;
-	return ( IsClientInGame( iClient ));
+
+	Handle hMenu = CreateMenu(BuyMenu_Handler);
+	SetMenuTitle(hMenu, "Your Points: %i", points[client]);
+	
+	if(iCategory != -1)
+		SetMenuExitBackButton(hMenu, true);
+		
+	int iCategoriesSize = GetArraySize(g_aCategories);
+	int iProductsSize = GetArraySize(g_aProducts);
+	
+	bool bAnyItems = false;
+	
+	for(int i=0;i < iCategoriesSize;i++)
+	{
+		enCategory cat;
+		GetArrayArray(g_aCategories, i, cat);
+		
+		if(cat.iCategory != iCategory)
+			continue;
+			
+		enProduct impostorProduct;
+		
+		impostorProduct.iBuyFlags = cat.iBuyFlags;
+		
+		if(PSAPI_GetErrorFromBuyflags(client, "", impostorProduct))
+			continue;
+			
+		char sInfo[128];
+		FormatEx(sInfo, sizeof(sInfo), "c%s", cat.sID); // c for category, p for product
+		AddMenuItem(hMenu, sInfo, cat.sName);
+		bAnyItems = true;
+	}
+	
+	for(int i=0;i < iProductsSize;i++)
+	{
+		enProduct product;
+		GetArrayArray(g_aProducts, i, product);
+		
+		if(product.iCategory != iCategory)
+			continue;
+			
+		else if(PSAPI_GetErrorFromBuyflags(client, "", product))
+			continue;
+			
+		char sInfo[128];
+		FormatEx(sInfo, sizeof(sInfo), "p%s", product.sAliases); // c for category, p for product
+		
+		char sDisplay[128], sFirstAlias[32];
+		BreakString(product.sAliases, sFirstAlias, sizeof(sFirstAlias));
+		
+		FormatEx(sDisplay, sizeof(sDisplay), "%s\nChat: !buy %s", product.sName, sFirstAlias);
+		AddMenuItem(hMenu, sInfo, sDisplay);
+		bAnyItems = true;
+	}
+	
+	if(bAnyItems)
+		DisplayMenu(hMenu, client, MENU_TIME_FOREVER);
+	
+	else
+		CloseHandle(hMenu);
+	
+	
+}
+
+public int BuyMenu_Handler(Handle hMenu, MenuAction action, int client, int item)
+{
+	if(action == MenuAction_End)
+		CloseHandle(hMenu);
+	
+	else if(action == MenuAction_Cancel && item == MenuCancel_ExitBack)
+	{
+		BuildBuyMenu(client);
+	}
+	else if(action == MenuAction_Select)
+	{
+		char sInfo[256];
+		
+		GetMenuItem(hMenu, item, sInfo, sizeof(sInfo));
+		
+		bool bCategory = false;
+		
+		if(sInfo[0] == 'c')
+		{
+			bCategory = true;
+			
+			// c for category, p for product
+			ReplaceStringEx(sInfo, sizeof(sInfo), "c", "");
+		}
+		else
+		{
+			// c for category, p for product
+			ReplaceStringEx(sInfo, sizeof(sInfo), "p", "");
+		}
+		
+		if(bCategory)
+		{
+			int iCategory = FindCategoryByIdentifier(sInfo);
+			BuildBuyMenu(client, iCategory);
+		}
+		else
+		{
+			char sFirstArg[64], sArgString[16];
+			
+			BreakString(sInfo, sFirstArg, sizeof(sFirstArg));
+			
+			FormatEx(sArgString, sizeof(sArgString), "#%i", GetClientUserId(client));
+			
+			PerformPurchaseOnAlias(client, sFirstArg, sArgString);
+		}
+	}
+	return 0;
 }
 
 bool IsInTeam(int iClient, L4DTeam team)
@@ -1744,17 +1793,6 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		return;
 	}
 	
-	L4DTeam iTeam = view_as<L4DTeam>(GetClientTeam(client));
-	
-	int iBuyFlags = product.iBuyFlags;
-	
-	
-	if( (iBuyFlags & BUYFLAG_INFECTED != BUYFLAG_INFECTED && iTeam == L4DTeam_Infected) || (!(iBuyFlags & BUYFLAG_SURVIVOR) && iTeam == L4DTeam_Survivor))
-	{
-		PrintToChat(client, "\x04[PS]\x03 Error: Only %s can buy this!", iBuyFlags & BUYFLAG_SURVIVOR ? "Survivors" : "Infected");
-		return;
-	}
-	
 	char target_name[MAX_TARGET_LENGTH];
 	int fake_target_list[MAXPLAYERS+1], fake_target_count;
 	int target_list[MAXPLAYERS+1], target_count;
@@ -1765,7 +1803,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			client,
 			fake_target_list,
 			MAXPLAYERS+1,
-			0,
+			COMMAND_FILTER_NO_IMMUNITY,
 			target_name,
 			sizeof(target_name),
 			tn_is_ml);
@@ -1796,79 +1834,19 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 	{
 		int targetclient = target_list[i];
 		
-		if(!(iBuyFlags & BUYFLAG_TEAM) && targetclient != client)
+	
+		char sError[256];
+		bool bShouldReturn;
+		
+		if(PSAPI_GetErrorFromBuyflags(client, sFirstArg, product, targetclient, sError, sizeof(sError), bShouldReturn))
 		{
-			PrintToChat(client, "\x04[PS]\x03 Cannot buy %s for teammates", sFirstArg);
-			continue;
-		}
-		
-		char Name[64];
-		GetClientName(targetclient, Name, sizeof(Name));
-		bool bBot = IsFakeClient(targetclient);
-		bool bAlive = IsPlayerAlive(targetclient);
-		bool bGhost = L4D_IsPlayerGhost(targetclient);
-		bool bPinned = L4D_IsPlayerPinned(targetclient);
-		int pinningClient = L4D_GetPinnedInfected(targetclient);
-		int pinningClass = view_as<int>(L4D2ZombieClass_NotInfected);
-		bool bProperClass = IsProperZombieClassForProduct(targetclient, product);
-		
-		if(pinningClient > 0)
-			pinningClass = view_as<int>(L4D2_GetPlayerZombieClass(pinningClient));
-		
-		
-		if(!(iBuyFlags & BUYFLAG_HUMANTEAM) && targetclient != client && !bBot)
-		{
-			PrintToChat(client, "\x04[PS]\x03 Cannot buy %s for non-bot teammates", sFirstArg);
-			continue;
-		}
-		
-		else if(!(iBuyFlags & BUYFLAG_GHOST) && bGhost)
-		{
-			PrintToChat(client, "\x04[PS]\x03 %s must be %s to buy %s", targetclient == client ? "You" : Name, iBuyFlags & BUYFLAG_ALIVE ? "alive" : "dead", sFirstArg);
-			continue;
-		}
-		else if(!(iBuyFlags & BUYFLAG_DEAD) && !bAlive)
-		{
-			PrintToChat(client, "\x04[PS]\x03 %s must be alive to buy %s", targetclient == client ? "You" : Name, sFirstArg);
-			continue;
-		}
-		
-		else if(!(iBuyFlags & BUYFLAG_ALIVE) && bAlive)
-		{
-			PrintToChat(client, "\x04[PS]\x03 %s must be dead to buy %s", targetclient == client ? "You" : Name, sFirstArg);
-			continue;
-		}
-		
-		else if(!bProperClass)
-		{
-			L4D2ZombieClassType class = L4D2_GetPlayerZombieClass(client);
+			PrintToChat(client, sError);
 			
-			PrintToChat(client, "\x04[PS]\x03 %s mustn't be %s to buy %s", targetclient == client ? "You" : Name, g_sBossNames[view_as<int>(class)], sFirstArg);
-			continue;
-		}
-		
-		else if(!(iBuyFlags & BUYFLAG_PINNED) && bPinned)
-		{
-			PrintToChat(client, "\x04[PS]\x03 %s mustn't be pinned to buy %s", targetclient == client ? "You" : Name, sFirstArg);
-			continue;
-		}
-		
-		else if(iBuyFlags & BUYFLAG_ONLY_PINNED && !bPinned)
-		{
-			PrintToChat(client, "\x04[PS]\x03 %s must be pinned to buy %s", targetclient == client ? "You" : Name, sFirstArg);
-			continue;
-		}
-		
-		else if(pinningClass != view_as<int>(L4D2ZombieClass_NotInfected) && !(iBuyFlags & (1<<pinningClass)))
-		{
-			PrintToChat(client, "\x04[PS]\x03 %s mustn't be pinned by a %s to buy %s", targetclient == client ? "You" : Name, g_sBossNames[pinningClass], sFirstArg);
-			continue;
-		}
-		
-		else if(product.NextBuyProduct[targetclient] > GetGameTime())
-		{
-			PrintToChat(client, "\x04[PS]\x03 %s is in %.2fsec cooldown for %s", sFirstArg, product.NextBuyProduct[targetclient] - GetGameTime(), targetclient == client ? "You" : Name);
-			continue;
+			if(bShouldReturn)
+				return;
+				
+			else
+				continue;
 		}
 	
 		Call_StartForward(g_fwOnTryBuyProduct);
@@ -1899,7 +1877,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			continue;
 		}
 		
-		product.NextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fCooldown;
+		product.fNextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fCooldown;
 		points[client] -= alteredProduct.iCost;
 		
 		SetArrayArray(g_aProducts, productPos, product);
@@ -1907,18 +1885,31 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		Handle hTimer;
 		DataPack DP;
 		
+		char sName[64];
+		GetClientName(targetclient, sName, sizeof(sName));
+		
 		// Creating a 0.0 timer will trigger it instantly, no time to populate the datapack.
 		if(alteredProduct.fDelay < 0.1)
 		{
-			 hTimer = CreateDataTimer(1.0, Timer_DelayGiveProduct, DP, TIMER_FLAG_NO_MAPCHANGE);
+			hTimer = CreateDataTimer(1.0, Timer_DelayGiveProduct, DP, TIMER_FLAG_NO_MAPCHANGE);
 			 
-			 PrintToChat(client, "\x04[PS]\x03 Bought %s for %s", sFirstArg, targetclient == client ? "yourself" : Name);
+			if(targetclient == client)
+			{
+				if(GetConVarBool(Notifications))
+					PrintToChat(client, "\x04[PS]\x03 Bought %s for yourself", sFirstArg);
+			}	
+			else
+			{
+				PrintToChat(client, "\x04[PS]\x03 Successfully bought \x01%s \x03for Player \x01%N", sFirstArg, targetclient );
+				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03bought you \x01%s", client, sFirstArg );
+			}
 		}	 
 		else 
 		{
 			hTimer = CreateDataTimer(alteredProduct.fDelay, Timer_DelayGiveProduct, DP, TIMER_FLAG_NO_MAPCHANGE);
 			
-			PrintToChat(client, "\x04[PS]\x03 %s will be bought for %s in %.2fsec", sFirstArg, targetclient == client ? "yourself" : Name, alteredProduct.fDelay);
+			PrintToChat(client, "\x04[PS]\x03 Successfully bought \x01%s \x03for Player \x01%N", sFirstArg, targetclient );
+			PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03will buy you \x01%s\x01 in %.1fsec", client, sFirstArg, alteredProduct.fDelay );
 		}
 			
 		DP.WriteCell(client);
@@ -1976,7 +1967,7 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 		
 		if(alteredProduct.iCost > 0)
 		{
-			product.NextBuyProduct[targetclient] = 0.0;
+			product.fNextBuyProduct[targetclient] = 0.0;
 			SetArrayArray(g_aProducts, productPos, product);
 			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, alteredProduct.iCost, points[client]);		
 		}
@@ -2003,7 +1994,7 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 		
 		if(alteredProduct.iCost > 0)
 		{
-			product.NextBuyProduct[targetclient] = 0.0;
+			product.fNextBuyProduct[targetclient] = 0.0;
 			SetArrayArray(g_aProducts, productPos, product);
 			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, alteredProduct.iCost, points[client]);		
 		}
@@ -2012,17 +2003,6 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	}
 
 	return Plugin_Stop;
-}
-
-stock bool IsProperZombieClassForProduct(int client, enProduct product)
-{
-	if(!IsPlayerAlive(client))
-		return true;
-		
-	else if(GetClientTeam(client) == view_as<int>(L4DTeam_Survivor))
-		return true;
-		
-	return view_as<bool>(product.iBuyFlags & view_as<int>(L4D2_GetPlayerZombieClass(client)));
 }
 
 stock void ResetProductCooldowns()
@@ -2034,8 +2014,8 @@ stock void ResetProductCooldowns()
 		enProduct product;
 		GetArrayArray(g_aProducts, i, product);
 		
-		for (int a = 0; a < sizeof(product.NextBuyProduct);a++)
-			product.NextBuyProduct[a] = 0.0;
+		for (int a = 0; a < sizeof(product.fNextBuyProduct);a++)
+			product.fNextBuyProduct[a] = 0.0;
 		
 		SetArrayArray(g_aProducts, i, product);
 	}
@@ -2075,8 +2055,8 @@ stock void DeleteProductsByAliases(char[] sAliases)
 }
 
 
-stock void DeleteCategoryByID(char[] sID)
-{	
+stock int FindCategoryByIdentifier(char[] sID)
+{
 	// i can be decremented, mustn't use int iSize = GetArraySize(g_aProducts)
 	for (int i = 0; i < GetArraySize(g_aCategories);i++)
 	{
@@ -2085,10 +2065,9 @@ stock void DeleteCategoryByID(char[] sID)
 		
 		if(StrEqual(cat.sID, sID, false))
 		{
-			RemoveFromArray(g_aCategories, i);
-			
-			// re-do the item in loop of "i".
-			i--;
+			return i;
 		}
 	}
+	
+	return -1;
 }
