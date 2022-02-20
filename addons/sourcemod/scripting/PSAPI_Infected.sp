@@ -161,6 +161,41 @@ public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sInfo,
 		iCost = GetConVarInt(PointsTerrorPerWitch) * L4D2_GetWitchCount();
 	}
 }
+
+public void PointSystemAPI_OnTryBuyProduct(
+{
+	if(L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Charger)
+	{
+			
+		// Airborne charger running.
+		int iVictim = L4D_GetVictimCarry(target);
+		
+		if(iVictim != -1)
+		{
+			if((!(GetEntityFlags(target) & FL_ONGROUND)))
+			{
+				PrintToChat(target, "\x04[PS]\x03 You cannot kill yourself until you reach the ground as a Charger.");
+				return Plugin_Handled;
+			}
+		
+		
+			// A charger is carrying afar away survivor is before transition.
+
+			float fTargetOrigin[3];
+			float fVictimOrigin[3];
+			
+			GetEntPropVector(target, Prop_Data, "m_vecOrigin", fTargetOrigin);
+			GetEntPropVector(iVictim, Prop_Data, "m_vecOrigin", fVictimOrigin);
+			
+			
+			PrintToChat(buyer, "%.2f", GetVectorDistance(fTargetOrigin, fVictimOrigin));
+			
+				//PrintToChat(target, "\x04[PS]\x03 You cannot kill yourself in transition from carry to pummel as a Charger.");
+				//return Plugin_Handled;
+			//}
+		}
+	}
+}
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown)
@@ -230,16 +265,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		PSAPI_ExecuteCheatCommand(target, "z_spawn_old mob auto");
 	}
 	else if (StrEqual(sInfo, "Infected Suicide", false))
-	{
-		if(L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Charger && (!(GetEntityFlags(target) & FL_ONGROUND)))
-		{
-			if(L4D_GetVictimCarry(target) != -1 && L4D_GetVictimCharger(target) == -1)
-			{
-				PrintToChat(target, "\x04[PS]\x03 You cannot kill yourself until you reach the ground as a Charger.");
-				return Plugin_Handled;
-			}
-		}
-		
+	{	
 		ForcePlayerSuicide(target);
 	}
 	

@@ -411,7 +411,8 @@ public int Native_FetchProductCostByAlias(Handle plugin, int numParams)
 	Call_PushCell(buyer);
 	Call_PushString(alteredProduct.sInfo);
 	Call_PushString(alteredProduct.sAliases);
-	Call_PushString(alteredProduct.sName);
+	Call_PushStringEx(alteredProduct.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(alteredProduct.sDescription, sizeof(enProduct::sDescription), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushCell(targetclient);
 	Call_PushCellRef(alteredProduct.iCost);
 	Call_PushFloatRef(alteredProduct.fDelay);
