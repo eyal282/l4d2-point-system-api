@@ -12,6 +12,7 @@
 
 ConVar g_hCommonLimit;
 int ucommonleft;
+int witchesinqueue;
 
 Handle PointsSuicide = INVALID_HANDLE;
 Handle PointsHunter = INVALID_HANDLE;
@@ -24,6 +25,19 @@ Handle PointsWitch = INVALID_HANDLE;
 Handle PointsTank = INVALID_HANDLE;
 Handle PointsHorde = INVALID_HANDLE;
 Handle PointsUmob = INVALID_HANDLE;
+Handle PointsTerrorPerWitch = INVALID_HANDLE;
+Handle WitchLimit = INVALID_HANDLE;
+
+char g_sUncommonModels[][] =
+{
+	"models/infected/common_male_riot.mdl",
+	"models/infected/common_male_ceda.mdl",
+	"models/infected/common_male_clown.mdl",
+	"models/infected/common_male_mud.mdl",
+	"models/infected/common_male_roadcrew.mdl",
+	"models/infected/common_male_fallen_survivor.mdl",
+	"models/infected/common_male_jimmy.mdl"
+};
 
 public Plugin myinfo = 
 {
@@ -36,7 +50,7 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	AutoExecConfig_SetFile("PointSystemAPI");
+	AutoExecConfig_SetFile("PointSystemAPI_Infected");
 	
 	g_hCommonLimit = FindConVar("z_common_limit");
 	
@@ -51,6 +65,10 @@ public void OnPluginStart()
 	PointsTank = AutoExecConfig_CreateConVar("l4d2_points_tank", "30", "How many points does a tank cost");
 	PointsHorde = AutoExecConfig_CreateConVar("l4d2_points_horde", "15", "How many points does a horde cost");
 	PointsUmob = AutoExecConfig_CreateConVar("l4d2_points_umob", "12", "How many points does an uncommon mob cost");
+	PointsTerrorPerWitch = AutoExecConfig_CreateConVar("l4d2_points_terror_per_witch", "10", "How many points does a terror cost per witch");
+	WitchLimit = AutoExecConfig_CreateConVar("l4d2_points_witch_limiter", "10", "Maximum amount of witches");
+	
+	HookEvent("round_start", Event_RoundStart, EventHookMode_Post);
 	
 	HookConVarChange(g_hCommonLimit, convarChange_commonLimit);
 	
@@ -75,14 +93,31 @@ public void convarChange_commonLimit(ConVar convar, const char[] oldValue, const
 
 public void OnMapStart()
 {
-	PrecacheModel("models/infected/common_male_riot.mdl", true);
-	PrecacheModel("models/infected/common_male_ceda.mdl", true);
-	PrecacheModel("models/infected/common_male_clown.mdl", true);
-	PrecacheModel("models/infected/common_male_mud.mdl", true);
-	PrecacheModel("models/infected/common_male_roadcrew.mdl", true);
-	PrecacheModel("models/infected/common_male_fallen_survivor.mdl", true);
-	PrecacheModel("models/infected/common_male_jimmy.mdl", true);
+	for (int i = 0; i < sizeof(g_sUncommonModels);i++)
+		PrecacheModel(g_sUncommonModels[i], true);
+		
 	ucommonleft = 0;
+	
+	CreateTimer(1.0, Timer_CheckWitchCount, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+}
+
+public Action Timer_CheckWitchCount(Handle hTimer)
+{
+	if(witchesinqueue <= 0)
+		return Plugin_Continue;
+	
+	else if(L4D2_GetWitchCount() >= GetConVarInt(WitchLimit))
+		return Plugin_Continue;
+		
+	int client = GetRandomInfected(-1, 0);
+	
+	if(client == 0)
+		return Plugin_Continue;
+	
+	PSAPI_ExecuteCheatCommand(client, "z_spawn_old witch auto");
+	witchesinqueue--;
+	
+	return Plugin_Continue;
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -101,19 +136,31 @@ public void OnEntityCreated(int entity, const char[] classname)
 	else if(!StrEqual(classname, "infected", false))
 		return;
 	
-	switch(GetRandomInt(1, 6))
-	{
-		case 1: SetEntityModel(entity, "models/infected/common_male_riot.mdl");
-		case 2: SetEntityModel(entity, "models/infected/common_male_ceda.mdl");
-		case 3: SetEntityModel(entity, "models/infected/common_male_clown.mdl");
-		case 4: SetEntityModel(entity, "models/infected/common_male_mud.mdl");
-		case 5: SetEntityModel(entity, "models/infected/common_male_roadcrew.mdl");
-		case 6: SetEntityModel(entity, "models/infected/common_male_fallen_survivor.mdl");
-	}
+	int iRNG = GetRandomInt(0, sizeof(g_sUncommonModels) - 1);
+	
+	if(!IsModelPrecached(g_sUncommonModels[iRNG]))
+		PrecacheModel(g_sUncommonModels[iRNG]);
+		
+	
+	SetEntityModel(entity, g_sUncommonModels[iRNG]);
 	
 	ucommonleft--;
 }
 
+public Action Event_RoundStart(Handle hEvent, const char[] Name, bool dontBroadcast)
+{
+	ucommonleft = 0;
+	
+	return Plugin_Continue;
+}
+
+public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int &iCost, float &fDelay, float &fCooldown)
+{
+	if(StrEqual(sInfo, "Terror All Witches Attack"))
+	{
+		iCost = GetConVarInt(PointsTerrorPerWitch) * L4D2_GetWitchCount();
+	}
+}
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown)
@@ -143,7 +190,34 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 	}
 	else if(StrEqual(sInfo, "Witch"))
 	{
-		PSAPI_ExecuteCheatCommand(target, "z_spawn_old witch auto");
+		if(L4D2_GetWitchCount() < GetConVarInt(WitchLimit))
+		{
+			PSAPI_ExecuteCheatCommand(target, "z_spawn_old witch auto");	
+		}
+		else
+		{
+			witchesinqueue++;
+			
+			PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
+		}
+	}
+	else if(StrEqual(sInfo, "Terror All Witches Attack"))
+	{
+		int iEntity = -1;
+		
+		while((iEntity = FindEntityByClassname(iEntity, "witch")) != -1)
+		{
+			int iAttacker = GetRandomSurvivor(1, 0);
+			
+			if(iAttacker == 0)
+			{
+				return Plugin_Handled;
+			}
+			else
+			{
+				SDKHooks_TakeDamage(iEntity, iAttacker, iAttacker, 1.0, DMG_BULLET);
+			}
+		}
 	}
 	else if(StrEqual(sInfo, "Horde"))
 	{
@@ -175,7 +249,7 @@ public void CreateInfectedProducts()
 {
 	
 	
-	char sInfo[64];
+	char sInfo[256];
 	
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %iboomer", GetConVarInt(PointsBoomer) == CalculateGhostPrice() ? 0 : 1);
 	PS_CreateProduct(-1, GetConVarInt(PointsBoomer), "Boomer", "Ghost Spawn of a Boomer", "boomer", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
@@ -202,6 +276,12 @@ public void CreateInfectedProducts()
 	BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
 	PS_CreateProduct(-1, GetConVarInt(PointsWitch), "Witch", "Spawns a witch", "witch", "Witch", 0.0, 5.0,
+	BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
+	
+	
+	FormatEx(sInfo, sizeof(sInfo), "Forces all witches to attack random players\nCosts %i points multiplied by the number of witches", GetConVarInt(PointsTerrorPerWitch));
+	
+	PS_CreateProduct(-1, GetConVarInt(PointsTerrorPerWitch), "Terror", sInfo, "terror", "Terror All Witches Attack", 0.0, 5.0,
 	BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
 	
 	PS_CreateProduct(-1, GetConVarInt(PointsHorde), "Horde", NO_DESCRIPTION, "horde", "Horde", 0.0, 10.0,

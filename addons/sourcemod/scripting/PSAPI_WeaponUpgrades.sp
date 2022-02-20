@@ -26,17 +26,17 @@ ConVar g_cvLaserPointerCost;
 
 public void OnPluginStart()
 {	
-	AutoExecConfig_SetFile("PointSystemAPI");
+	AutoExecConfig_SetFile("PointSystemAPI_WeaponUpgrades");
 	
-	g_cvExplosiveAmmoCost = AutoExecConfig_CreateConVar("l4d2_points_exammo_cost", "35");
-	g_cvIncendiaryAmmoCost = AutoExecConfig_CreateConVar("l4d2_points_incammo_cost", "15");
+	g_cvExplosiveAmmoCost = AutoExecConfig_CreateConVar("l4d2_points_exammo_cost", "8");
+	g_cvIncendiaryAmmoCost = AutoExecConfig_CreateConVar("l4d2_points_incammo_cost", "5");
 	g_cvLaserPointerCost = AutoExecConfig_CreateConVar("l4d2_points_laser_pointer_cost", "0");
-	
+		
 	CreateProducts();
-	
+
 	// This makes an internal call to AutoExecConfig with the given configfile
 	AutoExecConfig_ExecuteFile();
-
+	
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
 }

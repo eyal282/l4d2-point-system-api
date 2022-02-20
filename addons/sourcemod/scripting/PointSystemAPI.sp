@@ -13,6 +13,7 @@
 
 ArrayList g_aCategories, g_aProducts;
 
+GlobalForward g_fwOnGetParametersProduct; // Do not print errors here!!!
 GlobalForward g_fwOnTryBuyProduct; // Calculated before the delay.
 GlobalForward g_fwOnBuyProductPost; // Calculated after the delay.
 GlobalForward g_fwOnShouldGiveProduct; // We should now give the product to the user, because the delay has passed and not refunded.
@@ -128,7 +129,9 @@ public void OnPluginStart()
 	g_aCategories = new ArrayList(sizeof(enCategory));
 	g_aProducts = new ArrayList(sizeof(enProduct));
 	
-	g_fwOnTryBuyProduct = CreateGlobalForward("PointSystemAPI_OnTryBuyProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_CellByRef, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
+	g_fwOnGetParametersProduct = CreateGlobalForward("PointSystemAPI_OnGetParametersProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
+	
+	g_fwOnTryBuyProduct = CreateGlobalForward("PointSystemAPI_OnTryBuyProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
 	
 	g_fwOnBuyProductPost = CreateGlobalForward("PointSystemAPI_OnBuyProductPost", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
 	
@@ -186,6 +189,7 @@ public void OnPluginStart()
 	
 	RegConsoleCmd("sm_buystuff", BuyMenu);
 	RegConsoleCmd("sm_buy", BuyMenu);
+	RegConsoleCmd("sm_b", BuyMenu);
 	RegConsoleCmd("sm_usepoints", BuyMenu);
 	RegConsoleCmd("sm_points", ShowPoints);
 	RegConsoleCmd("sm_send", Command_SendPoints, "sm_sendpoints <target> [amount]");
@@ -221,11 +225,13 @@ public void OnPluginStart()
 	HookEvent("finale_win", Event_Finale);
 	HookEvent ("player_team", Event_ChangeTeam, EventHookMode_Pre);
 	HookEvent("player_left_start_area", Event_PlayerLeftStartArea, EventHookMode_Post);
-	
-	AutoExecConfig(true, "PointSystemAPI");
-	//AutoExecConfig(true, "l4d2_points_system");
 }
 
+public void L4D_OnServerHibernationUpdate(bool hibernating)
+{
+	if(!hibernating)
+		RegPluginLibrary("PointSystemAPI");
+}
 // Global Forward
 public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName)
 {
@@ -261,31 +267,43 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 
 public void OnMapStart()
 {
-	PrecacheModel("models/v_models/v_rif_sg552.mdl", true);
-	PrecacheModel("models/w_models/weapons/w_rifle_sg552.mdl", true);
-	PrecacheModel("models/v_models/v_snip_awp.mdl", true);
-	PrecacheModel("models/w_models/weapons/w_sniper_awp.mdl", true);
-	PrecacheModel("models/v_models/v_snip_scout.mdl", true);
-	PrecacheModel("models/w_models/weapons/w_sniper_scout.mdl", true);
-	PrecacheModel("models/v_models/v_smg_mp5.mdl", true);
-	PrecacheModel("models/w_models/weapons/w_smg_mp5.mdl", true);
-	PrecacheModel("models/w_models/weapons/50cal.mdl", true);
-	PrecacheModel("models/w_models/v_rif_m60.mdl", true);
-	PrecacheModel("models/w_models/weapons/w_m60.mdl", true);
-	PrecacheModel("models/v_models/v_m60.mdl", true);
-	PrecacheModel("models/infected/witch_bride.mdl", true);
-	PrecacheModel("models/infected/witch.mdl", true);
-	PrecacheModel("models/infected/common_male_riot.mdl", true);
-	PrecacheModel("models/infected/common_male_ceda.mdl", true);
-	PrecacheModel("models/infected/common_male_clown.mdl", true);
-	PrecacheModel("models/infected/common_male_mud.mdl", true);
-	PrecacheModel("models/infected/common_male_roadcrew.mdl", true);
-	PrecacheModel("models/infected/common_male_fallen_survivor.mdl", true);
-	PrecacheModel("models/infected/common_male_jimmy.mdl", true);
+	CreateTimer(1.0, Timer_Cleanup, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+	
 	GetCurrentMap(MapName, sizeof(MapName));
 	g_bIsAreaStart = false;
 }	
 
+
+public Action Timer_Cleanup(Handle hTimer)
+{
+	int iEntity = -1;
+	
+	while((iEntity = FindEntityByTargetname(iEntity, "PointSystemAPI", false, true)) != -1)
+	{
+		if(!HasEntProp(iEntity, Prop_Data, "m_hOwnerEntity") || GetEntPropEnt(iEntity, Prop_Data, "m_hOwnerEntity") != -1)
+			continue;
+		
+		char sTargetname[64];
+		GetEntPropString(iEntity, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
+		
+		ReplaceStringEx(sTargetname, sizeof(sTargetname), "PointSystemAPI ", "");
+		
+		int iSecondsLeft = StringToInt(sTargetname);
+		
+		if(iSecondsLeft <= 0)
+		{
+			AcceptEntityInput(iEntity, "Kill");
+		}	
+		else
+		{
+			FormatEx(sTargetname, sizeof(sTargetname), "PointSystemAPI %i", iSecondsLeft - 1);
+			
+			SetEntPropString(iEntity, Prop_Data, "m_iName", sTargetname);
+		}
+	}
+	
+	return Plugin_Continue;
+}
 
 public void OnMapEnd()
 {
@@ -314,13 +332,15 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
 	CreateNative("PS_CreateCategory", Native_CreateCategory);
 	CreateNative("PS_CreateProduct", Native_CreateProduct);
+	CreateNative("PS_FetchProductCostByAlias", Native_FetchProductCostByAlias);
 	CreateNative("PS_GetVersion", Native_GetVersion);
 	CreateNative("PS_SetPoints", Native_SetPoints);
 	CreateNative("PS_HardSetPoints", Native_HardSetPoints);
 	CreateNative("PS_GetPoints", Native_GetPoints);
 	CreateNative("PS_FullHeal", Native_FullHeal);
-
+	
 	RegPluginLibrary("PointSystemAPI");
+	
 	return APLRes_Success;
 }
 
@@ -368,6 +388,38 @@ public any Native_CreateProduct(Handle plugin, int numParams)
 	PushArrayArray(g_aProducts, product);
 	
 	return true;
+	
+}
+
+public int Native_FetchProductCostByAlias(Handle plugin, int numParams)
+{
+	char sAlias[64];
+	
+	GetNativeString(1, sAlias, sizeof(sAlias));
+	
+	int buyer = GetNativeCell(2);
+	int targetclient = GetNativeCell(3);
+
+	enProduct product;
+	LookupProductByAlias(sAlias, product);
+	
+	Call_StartForward(g_fwOnGetParametersProduct);
+	
+	enProduct alteredProduct; 
+	alteredProduct = product;
+	
+	Call_PushCell(buyer);
+	Call_PushString(alteredProduct.sInfo);
+	Call_PushString(alteredProduct.sAliases);
+	Call_PushString(alteredProduct.sName);
+	Call_PushCell(targetclient);
+	Call_PushCellRef(alteredProduct.iCost);
+	Call_PushFloatRef(alteredProduct.fDelay);
+	Call_PushFloatRef(alteredProduct.fCooldown);
+	
+	Call_Finish();
+	
+	return alteredProduct.iCost;
 	
 }
 
@@ -975,6 +1027,11 @@ public Action BuyMenu(int client, int args)
 		char sArgString[128];
 		
 		GetCmdArg(1, sFirstArg, sizeof(sFirstArg));
+		TrimString(sFirstArg);
+		
+		if(sFirstArg[0] == EOS)
+			return Plugin_Handled;
+			
 		GetCmdArgString(sArgString, sizeof(sArgString));
 		
 		// 2 and beyond are the target's name
@@ -1549,7 +1606,9 @@ void BuildBuyMenu(int client, int iCategory = -1)
 		
 		impostorProduct.iBuyFlags = cat.iBuyFlags;
 		
-		if(PSAPI_GetErrorFromBuyflags(client, "", impostorProduct))
+		bool bShouldReturn;
+		
+		if(PSAPI_GetErrorFromBuyflags(client, "", impostorProduct, _, _, _, bShouldReturn) && bShouldReturn)
 			continue;
 			
 		char sInfo[128];
@@ -1565,8 +1624,10 @@ void BuildBuyMenu(int client, int iCategory = -1)
 		
 		if(product.iCategory != iCategory)
 			continue;
-			
-		else if(PSAPI_GetErrorFromBuyflags(client, "", product))
+		
+		bool bShouldReturn;
+		
+		if(PSAPI_GetErrorFromBuyflags(client, "", product, _, _, _, bShouldReturn) && bShouldReturn)
 			continue;
 			
 		char sInfo[128];
@@ -1626,18 +1687,91 @@ public int BuyMenu_Handler(Handle hMenu, MenuAction action, int client, int item
 		}
 		else
 		{
-			char sFirstArg[64], sArgString[16];
+			char sFirstArg[64];
 			
 			BreakString(sInfo, sFirstArg, sizeof(sFirstArg));
-			
-			FormatEx(sArgString, sizeof(sArgString), "#%i", GetClientUserId(client));
-			
-			PerformPurchaseOnAlias(client, sFirstArg, sArgString);
+		
+			ShowConfirmPurchaseMenu(client, sFirstArg);
 		}
 	}
 	return 0;
 }
 
+void ShowConfirmPurchaseMenu(int client, char[] sFirstArg)
+{
+	enProduct product;
+	
+	LookupProductByAlias(sFirstArg, product);
+	
+	Handle hMenu = CreateMenu(ConfirmBuyMenu_Handler);
+	
+	Call_StartForward(g_fwOnGetParametersProduct);
+	
+	enProduct alteredProduct; 
+	alteredProduct = product;
+	
+	Call_PushCell(client);
+	Call_PushString(alteredProduct.sInfo);
+	Call_PushString(alteredProduct.sAliases);
+	Call_PushString(alteredProduct.sName);
+	Call_PushCell(client);
+	Call_PushCellRef(alteredProduct.iCost);
+	Call_PushFloatRef(alteredProduct.fDelay);
+	Call_PushFloatRef(alteredProduct.fCooldown);
+	
+	Call_Finish();
+	
+	if(product.sDescription[0] != EOS)
+		SetMenuTitle(hMenu, "Cost: %i\nDescription: %s", product.iCost, product.sDescription);
+		
+	else
+		SetMenuTitle(hMenu, "Cost: %i", alteredProduct.iCost);
+		
+	
+	SetMenuExitBackButton(hMenu, true);
+		
+	AddMenuItem(hMenu, sFirstArg, "Yes");
+	
+	char sInfo[16];
+	IntToString(product.iCategory, sInfo, sizeof(sInfo));
+	
+	AddMenuItem(hMenu, sInfo, "No");
+	
+	DisplayMenu(hMenu, client, MENU_TIME_FOREVER);
+	
+	
+}
+
+public int ConfirmBuyMenu_Handler(Handle hMenu, MenuAction action, int client, int item)
+{
+	if(action == MenuAction_End)
+		CloseHandle(hMenu);
+	
+	else if(action == MenuAction_Cancel && item == MenuCancel_ExitBack)
+	{
+		// 1 = The "No" item that we gave the category number
+		char sInfo[16];
+		GetMenuItem(hMenu, 1, sInfo, sizeof(sInfo));
+		
+		BuildBuyMenu(client, StringToInt(sInfo));
+	}
+	else if(action == MenuAction_Select)
+	{
+		if(item == 0)
+		{
+			char sFirstArg[64];
+			GetMenuItem(hMenu, item, sFirstArg, sizeof(sFirstArg));
+			
+			char sArgString[16];
+ 
+			FormatEx(sArgString, sizeof(sArgString), "#%i", GetClientUserId(client));
+				
+			PerformPurchaseOnAlias(client, sFirstArg, sArgString);
+		}
+	}
+	
+	return 0;
+}
 bool IsInTeam(int iClient, L4DTeam team)
 {
 	if( GetClientTeam( iClient ) == view_as<int>(team) )
@@ -1749,7 +1883,7 @@ stock void SetEntityHealthToMax(int entity)
 	SetEntityHealth(entity, GetEntProp(entity, Prop_Send, "m_iMaxHealth"));
 }
 
-stock int LookupProductByAlias(int client, char[] sAlias, enProduct finalProduct)
+stock int LookupProductByAlias(char[] sAlias, enProduct finalProduct)
 {
 	
 	int iSize = GetArraySize(g_aProducts);
@@ -1780,16 +1914,10 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 {
 	enProduct product;
 		
-	int productPos = LookupProductByAlias(client, sFirstArg, product);
+	int productPos = LookupProductByAlias(sFirstArg, product);
 	if(productPos == -1)
 	{
 		PrintToChat(client, "\x04[PS]\x03 Error: Product could not be found!");
-		return;
-	}
-	
-	else if(product.iCost < 0)
-	{
-		PrintToChat(client, "\x04[PS]\x03 Error: This product is disabled!");
 		return;
 	}
 	
@@ -1849,7 +1977,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 				continue;
 		}
 	
-		Call_StartForward(g_fwOnTryBuyProduct);
+		Call_StartForward(g_fwOnGetParametersProduct);
 		
 		enProduct alteredProduct; 
 		alteredProduct = product;
@@ -1858,10 +1986,24 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		Call_PushString(alteredProduct.sInfo);
 		Call_PushString(alteredProduct.sAliases);
 		Call_PushString(alteredProduct.sName);
-		Call_PushCellRef(targetclient);
+		Call_PushCell(targetclient);
 		Call_PushCellRef(alteredProduct.iCost);
 		Call_PushFloatRef(alteredProduct.fDelay);
 		Call_PushFloatRef(alteredProduct.fCooldown);
+		
+		Call_Finish();
+		
+		
+		Call_StartForward(g_fwOnTryBuyProduct);
+		
+		Call_PushCell(client);
+		Call_PushString(alteredProduct.sInfo);
+		Call_PushString(alteredProduct.sAliases);
+		Call_PushString(alteredProduct.sName);
+		Call_PushCell(targetclient);
+		Call_PushCell(alteredProduct.iCost);
+		Call_PushFloat(alteredProduct.fDelay);
+		Call_PushFloat(alteredProduct.fCooldown);
 		
 		Action result;
 		Call_Finish(result);
@@ -1885,8 +2027,8 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		Handle hTimer;
 		DataPack DP;
 		
-		char sName[64];
-		GetClientName(targetclient, sName, sizeof(sName));
+		char sTargetName[64];
+		GetClientName(targetclient, sTargetName, sizeof(sTargetName));
 		
 		// Creating a 0.0 timer will trigger it instantly, no time to populate the datapack.
 		if(alteredProduct.fDelay < 0.1)
@@ -1908,8 +2050,10 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		{
 			hTimer = CreateDataTimer(alteredProduct.fDelay, Timer_DelayGiveProduct, DP, TIMER_FLAG_NO_MAPCHANGE);
 			
-			PrintToChat(client, "\x04[PS]\x03 Successfully bought \x01%s \x03for Player \x01%N", sFirstArg, targetclient );
-			PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03will buy you \x01%s\x01 in %.1fsec", client, sFirstArg, alteredProduct.fDelay );
+			PrintToChat(client, "\x04[PS]\x03 You will buy\x01 %s\x03 for\x04 %s\x01 in %.1fsec", sFirstArg, targetclient == client ? "\x03yourself" : sTargetName, alteredProduct.fDelay);
+			
+			if(targetclient != client)
+				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03will buy you \x01%s\x01 in %.1fsec", client, sFirstArg, alteredProduct.fDelay );
 		}
 			
 		DP.WriteCell(client);
@@ -1938,7 +2082,7 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	
 	enProduct product;
 	
-	int productPos = LookupProductByAlias(client, sFirstArg, product);
+	int productPos = LookupProductByAlias(sFirstArg, product);
 	
 	// Should not happen/
 	if(productPos == -1)
@@ -2067,6 +2211,29 @@ stock int FindCategoryByIdentifier(char[] sID)
 		{
 			return i;
 		}
+	}
+	
+	return -1;
+}
+
+stock int FindEntityByTargetname(int startEnt, const char[] TargetName, bool caseSensitive, bool bContains) // Same as FindEntityByClassname with sensitivity and contain features
+{
+	int entCount = GetEntityCount();
+	
+	char EntTargetName[300];
+	
+	for(int i=startEnt+1;i < entCount;i++)
+	{
+		if(!IsValidEntity(i))
+			continue;
+			
+		else if(!IsValidEdict(i))
+			continue;
+			
+		GetEntPropString(i, Prop_Data, "m_iName", EntTargetName, sizeof(EntTargetName));
+		
+		if((StrEqual(EntTargetName, TargetName, caseSensitive) && !bContains) || (StrContains(EntTargetName, TargetName, caseSensitive) != -1 && bContains))
+			return i;	
 	}
 	
 	return -1;

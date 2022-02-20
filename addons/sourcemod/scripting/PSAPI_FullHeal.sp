@@ -12,24 +12,31 @@
 
 public Plugin myinfo = 
 {
-	name = "Infected Module --> Point System API",
+	name = "Full Heal Module --> Point System API",
 	author = "Eyal282",
-	description = "Every infected Item to be bought in Point System",
+	description = "Full Heal Module for the multi team product full heal.",
 	version = PLUGIN_VERSION,
 	url = ""
 };
 
+int g_iTankHealsBought[MAXPLAYERS] = { 0, ... };
+
 ConVar g_hHealCost;
 ConVar g_hTankHealAmount;
 ConVar g_hTankHealPercent;
+ConVar g_hTankHealMax;
 
 public void OnPluginStart()
 {	
-	AutoExecConfig_SetFile("PointSystemAPI");
+	HookEvent("player_spawn", Event_PlayerSpawnOrDeath, EventHookMode_Post);
+	HookEvent("player_death", Event_PlayerSpawnOrDeath, EventHookMode_Post);
+	
+	AutoExecConfig_SetFile("PointSystemAPI_FullHeal");
 	
 	g_hHealCost = AutoExecConfig_CreateConVar("l4d2_points_full_heal", "15", "How many points a complete heal costs");
 	g_hTankHealAmount = AutoExecConfig_CreateConVar("l4d2_points_tank_heal_amount", "0", "Amount of HP a tank will heal instead of a full heal when buying a heal.");
 	g_hTankHealPercent = AutoExecConfig_CreateConVar("l4d2_points_tank_heal_percent", "20.0", "Percentage of HP a tank will heal instead of a full heal when buying a heal", _, true, 0.0, true, 100.0);
+	g_hTankHealMax = AutoExecConfig_CreateConVar("l4d2_points_tank_heal_max", "15", "Amount of times a Tank can heal", _, true, 0.0, true, 86400.0);
 	
 	CreateProducts();
 	
@@ -38,6 +45,47 @@ public void OnPluginStart()
 
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
+}
+
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	CreateNative("PS_GetTankHealCount", Native_GetTankHealCount);
+	CreateNative("PS_AddTankHealCount", Native_AddTankHealCount);
+	
+	RegPluginLibrary("PointSystemAPI_FullHeal");
+	return APLRes_Success;
+}
+
+public int Native_GetTankHealCount(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	SetNativeCellRef(2, GetConVarInt(g_hTankHealMax));
+	
+	return g_iTankHealsBought[client];
+}
+
+public any Native_AddTankHealCount(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	int amount = GetNativeCell(2);
+	
+	g_iTankHealsBought[client] += amount;
+	
+	return 0;
+}
+
+
+public Action Event_PlayerSpawnOrDeath(Handle hEvent, const char[] Name, bool dontBroadcast)
+{
+	int client = GetClientOfUserId(GetEventInt(hEvent, "userid"));
+	
+	if(client == 0)
+		return Plugin_Continue;
+		
+	g_iTankHealsBought[client] = 0;
+	
+	return Plugin_Continue;
 }
 
 public void OnConfigsExecuted()
@@ -53,7 +101,31 @@ public void OnLibraryAdded(const char[] name)
 	}
 }
 
-public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int &target, int &iCost, float &fDelay, float &fCooldown)
+// Called even if you cannot afford the product, and even if you didn't try to buy the product'.
+// sAliases contain the original alias list, to compare your own alias as an identifier.
+// If the cost drops below 0, the item is disabled!!!
+// No return
+public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int &iCost, float &fDelay, float &fCooldown)
+{
+	if(StrEqual(sInfo, "Full Heal"))
+	{
+		if(GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank)
+		{
+			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
+			
+			int iMissingHealth = GetEntityMaxHealth(target) - GetEntityHealth(target);
+			
+			int purchases = RoundToCeil(float(iMissingHealth) / float(iAmountToHeal));
+			
+			if(g_iTankHealsBought[target] + purchases >= GetConVarInt(g_hTankHealMax))
+				purchases = GetConVarInt(g_hTankHealMax) - g_iTankHealsBought[target];
+				
+			iCost *= purchases;
+		}
+	}
+}
+
+public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown)
 {
 	
 	if(StrEqual(sInfo, "Full Heal") || StrEqual(sInfo, "Partial Heal"))
@@ -63,17 +135,16 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 			PrintToChat(buyer, "Error: Max Health");
 			return Plugin_Handled;
 		}
-	}
-	
-	if(StrEqual(sInfo, "Full Heal"))
-	{
-		if(GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank)
+		
+		else if(GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank && buyer != target)
 		{
-			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
-			
-			int iMissingHealth = GetEntityMaxHealth(target) - GetEntityHealth(target);
-			
-			iCost *= RoundToCeil(float(iMissingHealth) / float(iAmountToHeal));
+			PrintToChat(buyer, "Error: Tanks must heal themselves because they are limited in buying health.");
+			return Plugin_Handled;
+		}
+		else if(GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank && g_iTankHealsBought[target] >= GetConVarInt(g_hTankHealMax))
+		{
+			PrintToChat(buyer, "Error: Max Tank heal limit");
+			return Plugin_Handled;
 		}
 	}
 	
@@ -86,7 +157,24 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 {
 	if(StrEqual(sInfo, "Full Heal"))
 	{
-		PS_FullHeal(target);
+		if(GetClientTeam(target) == view_as<int>(L4DTeam_Survivor) || L4D2_GetPlayerZombieClass(target) != L4D2ZombieClass_Tank)
+			PS_FullHeal(target);
+			
+		else
+		{
+			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
+			
+			int iMissingHealth = GetEntityMaxHealth(target) - GetEntityHealth(target);
+			
+			int purchases = RoundToCeil(float(iMissingHealth) / float(iAmountToHeal));
+			
+			if(g_iTankHealsBought[target] + purchases >= GetConVarInt(g_hTankHealMax))
+				purchases = GetConVarInt(g_hTankHealMax) - g_iTankHealsBought[target];
+			
+			g_iTankHealsBought[target] += purchases;
+			
+			HealEntity(target, iAmountToHeal * purchases);
+		}
 		
 		return Plugin_Continue;
 	}
@@ -99,6 +187,8 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		{
 			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
 			
+			g_iTankHealsBought[target]++;
+			
 			HealEntity(target, iAmountToHeal);
 		}
 	}
@@ -109,12 +199,12 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 public void CreateProducts()
 {
 
-	int iCategory = PS_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE);
+	int iCategory = PS_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED);
 	PS_CreateProduct(iCategory, g_hHealCost.IntValue, "Heal", "Heals you to max health\nTanks gain less health", "heal", "Partial Heal", 0.0, 0.0,
-	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
+	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);	
 	
 	PS_CreateProduct(iCategory, g_hHealCost.IntValue, "Full Heal", "Heals you to max health\nFor tanks, as if they spam !buy heal", "fheal fullheal", "Full Heal", 0.0, 0.0,
-	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_TEAM | BUYFLAG_PINNED);	
+	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);	
 }
 
 
