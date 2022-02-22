@@ -154,51 +154,63 @@ public Action Event_RoundStart(Handle hEvent, const char[] Name, bool dontBroadc
 	return Plugin_Continue;
 }
 
-public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int &iCost, float &fDelay, float &fCooldown)
+public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float &fCost, float &fDelay, float &fCooldown)
 {
 	if(StrEqual(sInfo, "Terror All Witches Attack"))
 	{
-		iCost = GetConVarInt(PointsTerrorPerWitch) * L4D2_GetWitchCount();
+		fCost = GetConVarFloat(PointsTerrorPerWitch) * L4D2_GetWitchCount();
 	}
 }
 
-public void PointSystemAPI_OnTryBuyProduct(
+// sAliases contain the original alias list, to compare your own alias as an identifier.
+// You should print an error because blocking purchase prints nothing
+// Return Plugin_Handled to block purchase
+public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
-	if(L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Charger)
+	if(StrEqual(sInfo, "Infected Suicide", false))
 	{
-			
-		// Airborne charger running.
-		int iVictim = L4D_GetVictimCarry(target);
-		
-		if(iVictim != -1)
+		if(L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Charger)
 		{
-			if((!(GetEntityFlags(target) & FL_ONGROUND)))
+				
+			// Airborne charger running.
+			int iVictim = L4D_GetVictimCarry(target);
+			
+			if(iVictim != 0)
 			{
-				PrintToChat(target, "\x04[PS]\x03 You cannot kill yourself until you reach the ground as a Charger.");
-				return Plugin_Handled;
+				if((!(GetEntityFlags(target) & FL_ONGROUND)))
+				{
+					PrintToChat(target, "\x04[PS]\x03 You cannot kill yourself until you reach the ground as a Charger.");
+					return Plugin_Handled;
+				}
+			
+				// In the future do the check where if you are pummeling & not carrying & in charge mode = in transition
 			}
-		
-		
-			// A charger is carrying afar away survivor is before transition.
-
-			float fTargetOrigin[3];
-			float fVictimOrigin[3];
-			
-			GetEntPropVector(target, Prop_Data, "m_vecOrigin", fTargetOrigin);
-			GetEntPropVector(iVictim, Prop_Data, "m_vecOrigin", fVictimOrigin);
-			
-			
-			PrintToChat(buyer, "%.2f", GetVectorDistance(fTargetOrigin, fVictimOrigin));
-			
-				//PrintToChat(target, "\x04[PS]\x03 You cannot kill yourself in transition from carry to pummel as a Charger.");
-				//return Plugin_Handled;
-			//}
 		}
 	}
+	
+	return Plugin_Continue;
+}
+
+// If a delay exists, called several seconds after PointSystemAPI_OnTryBuyProduct. Otherwise this is called instantly. 
+// sAliases contain the original alias list, to compare your own alias as an identifier.
+
+// You should reconsider printing an error because blocking purchase prints a refund point gain.
+// Return Plugin_Handled to refund.
+public Action PointSystemAPI_OnBuyProductPost(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
+{
+	if(strncmp(sInfo, "Special Infected Spawn - ", 25) == 0 || StrEqual(sInfo, "Special Infected Ghost Spawn", false))
+	{
+		if(IsPlayerAlive(buyer))
+		{
+			return Plugin_Handled;
+		}
+	}
+	
+	return Plugin_Continue;
 }
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
-public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown)
+public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
 	if(strncmp(sInfo, "Special Infected Spawn - ", 25) == 0)
 	{
@@ -278,47 +290,47 @@ public void CreateInfectedProducts()
 	char sInfo[256];
 	
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %iboomer", GetConVarInt(PointsBoomer) == CalculateGhostPrice() ? 0 : 1);
-	PS_CreateProduct(-1, GetConVarInt(PointsBoomer), "Boomer", "Ghost Spawn of a Boomer", "boomer", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsBoomer), "Boomer", "Ghost Spawn of a Boomer", "boomer", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
-	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ispitter", GetConVarInt(PointsSpitter) == CalculateGhostPrice() ? 0 : 1);
-	PS_CreateProduct(-1, GetConVarInt(PointsSpitter), "Spitter", "Ghost Spawn of a Spitter", "spitter", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
+	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ispitter", GetConVarFloat(PointsSpitter) == CalculateGhostPrice() ? 0 : 1);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSpitter), "Spitter", "Ghost Spawn of a Spitter", "spitter", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
-	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ismoker", GetConVarInt(PointsSmoker) == CalculateGhostPrice() ? 0 : 1);
-	PS_CreateProduct(-1, GetConVarInt(PointsSmoker), "Smoker", "Ghost Spawn of a Smoker", "smoker", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
+	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ismoker", GetConVarFloat(PointsSmoker) == CalculateGhostPrice() ? 0 : 1);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSmoker), "Smoker", "Ghost Spawn of a Smoker", "smoker", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
-	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ihunter", GetConVarInt(PointsHunter) == CalculateGhostPrice() ? 0 : 1);
-	PS_CreateProduct(-1, GetConVarInt(PointsHunter), "Hunter", "Ghost Spawn of a Hunter", "hunter", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
+	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ihunter", GetConVarFloat(PointsHunter) == CalculateGhostPrice() ? 0 : 1);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsHunter), "Hunter", "Ghost Spawn of a Hunter", "hunter", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
-	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %icharger", GetConVarInt(PointsCharger) == CalculateGhostPrice() ? 0 : 1);
-	PS_CreateProduct(-1, GetConVarInt(PointsCharger), "Charger", "Ghost Spawn of a Charger", "charger", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
+	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %icharger", GetConVarFloat(PointsCharger) == CalculateGhostPrice() ? 0 : 1);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsCharger), "Charger", "Ghost Spawn of a Charger", "charger", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
-	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ijockey", GetConVarInt(PointsJockey) == CalculateGhostPrice() ? 0 : 1);
-	PS_CreateProduct(-1, GetConVarInt(PointsJockey), "Jockey", "Ghost Spawn of a Jockey", "jockey", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
+	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ijockey", GetConVarFloat(PointsJockey) == CalculateGhostPrice() ? 0 : 1);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsJockey), "Jockey", "Ghost Spawn of a Jockey", "jockey", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
-	PS_CreateProduct(-1, CalculateGhostPrice(), "Ghost", "Instantly revives you to pick any Special Infected", "ghost", "Special Infected Ghost Spawn", 3.0, 0.0,
+	PSAPI_CreateProduct(-1, CalculateGhostPrice(), "Ghost", "Instantly revives you to pick any Special Infected", "ghost", "Special Infected Ghost Spawn", 3.0, 0.0,
 	BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_HUMANTEAM);
 	
-	PS_CreateProduct(-1, GetConVarInt(PointsTank), "Tank", "Ghost spawn of a Tank", "tank", "Special Infected Spawn - 1tank", 0.0, 0.0,
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsTank), "Tank", "Ghost spawn of a Tank", "tank", "Special Infected Spawn - 1tank", 0.0, 0.0,
 	BUYFLAG_INFECTED | BUYFLAG_DEAD);
 	
-	PS_CreateProduct(-1, GetConVarInt(PointsWitch), "Witch", "Spawns a witch", "witch", "Witch", 0.0, 5.0,
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsWitch), "Witch", "Spawns a witch", "witch", "Witch", 0.0, 5.0,
 	BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
 	
 	
-	FormatEx(sInfo, sizeof(sInfo), "Forces all witches to attack random players\nCosts %i points multiplied by the number of witches", GetConVarInt(PointsTerrorPerWitch));
+	FormatEx(sInfo, sizeof(sInfo), "Forces all witches to attack random players\nCosts %.0f points multiplied by the number of witches", GetConVarFloat(PointsTerrorPerWitch));
 	
-	PS_CreateProduct(-1, GetConVarInt(PointsTerrorPerWitch), "Terror", sInfo, "terror", "Terror All Witches Attack", 0.0, 5.0,
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsTerrorPerWitch), "Terror", sInfo, "terror", "Terror All Witches Attack", 0.0, 5.0,
 	BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
 	
-	PS_CreateProduct(-1, GetConVarInt(PointsHorde), "Horde", NO_DESCRIPTION, "horde", "Horde", 0.0, 10.0,
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsHorde), "Horde", NO_DESCRIPTION, "horde", "Horde", 0.0, 10.0,
 	BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
 	
 	char sDesc[128];
 	FormatEx(sDesc, sizeof(sDesc), "Sends a mob that will contain %i uncommon CI", GetConVarInt(g_hCommonLimit));
-	PS_CreateProduct(-1, GetConVarInt(PointsUmob), "Uncommon Mob", sDesc, "umob uncommonmob unmob ", "Uncommon Mob", 0.0, 1.0,
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsUmob), "Uncommon Mob", sDesc, "umob uncommonmob unmob ", "Uncommon Mob", 0.0, 1.0,
 	BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
 	
-	PS_CreateProduct(-1, GetConVarInt(PointsSuicide), "Suicide", "Instantly kills you", "kill suicide die death", "Infected Suicide", 0.0, 0.0,
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSuicide), "Suicide", "Instantly kills you", "kill suicide die death", "Infected Suicide", 0.0, 0.0,
 	BUYFLAG_INFECTED | BUYFLAG_ANY_ALIVE);	
 }
 
@@ -343,27 +355,27 @@ stock void SetPlayerLifeState(int client, bool ready)
 	SetEntProp(client, Prop_Send, "m_lifeState", ready);
 }
 
-stock int CalculateGhostPrice()
+stock float CalculateGhostPrice()
 {
-	int HighestCost = 0;
+	float HighestCost = 0.0;
 	
-	if(HighestCost < GetConVarInt(PointsHunter))
-		HighestCost = GetConVarInt(PointsHunter);
+	if(HighestCost < GetConVarFloat(PointsHunter))
+		HighestCost = GetConVarFloat(PointsHunter);
 		
-	if(HighestCost < GetConVarInt(PointsJockey))
-		HighestCost = GetConVarInt(PointsJockey);
+	if(HighestCost < GetConVarFloat(PointsJockey))
+		HighestCost = GetConVarFloat(PointsJockey);
 		
-	if(HighestCost < GetConVarInt(PointsSmoker))
-		HighestCost = GetConVarInt(PointsSmoker);
+	if(HighestCost < GetConVarFloat(PointsSmoker))
+		HighestCost = GetConVarFloat(PointsSmoker);
 			
-	if(HighestCost < GetConVarInt(PointsCharger))
-		HighestCost = GetConVarInt(PointsCharger);
+	if(HighestCost < GetConVarFloat(PointsCharger))
+		HighestCost = GetConVarFloat(PointsCharger);
 		
-	if(HighestCost < GetConVarInt(PointsBoomer))
-		HighestCost = GetConVarInt(PointsBoomer);
+	if(HighestCost < GetConVarFloat(PointsBoomer))
+		HighestCost = GetConVarFloat(PointsBoomer);
 		
-	if(HighestCost < GetConVarInt(PointsSpitter))
-		HighestCost = GetConVarInt(PointsSpitter);
+	if(HighestCost < GetConVarFloat(PointsSpitter))
+		HighestCost = GetConVarFloat(PointsSpitter);
 		
 	return HighestCost;
 }

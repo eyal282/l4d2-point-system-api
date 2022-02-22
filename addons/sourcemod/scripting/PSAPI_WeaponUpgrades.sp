@@ -56,7 +56,7 @@ public void OnLibraryAdded(const char[] name)
 
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
-public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown)
+public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
 	if(strncmp(sInfo, "upgrade_add", 11) == 0)
 	{
@@ -68,15 +68,15 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 public void CreateProducts()
 {
-	int iCategory = PS_CreateCategory(-1, "weapon upgrades", "Weapon Upgrades", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE);
+	int iCategory = PSAPI_CreateCategory(-1, "weapon upgrades", "Weapon Upgrades", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE);
 	
-	PS_CreateProduct(iCategory, GetConVarInt(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "exammo expammo", "upgrade_add EXPLOSIVE_AMMO", 0.0, 0.0,
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "exammo expammo", "upgrade_add EXPLOSIVE_AMMO", 0.0, 0.0,
 	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);	
 	
-	PS_CreateProduct(iCategory, GetConVarInt(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add INCENDIARY_AMMO", 0.0, 0.0,
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add INCENDIARY_AMMO", 0.0, 0.0,
 	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_BOTTEAM);	
 	
-	PS_CreateProduct(iCategory, GetConVarInt(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add LASER_SIGHT", 0.0, 0.0,
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add LASER_SIGHT", 0.0, 0.0,
 	BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_BOTTEAM);	
 }
 

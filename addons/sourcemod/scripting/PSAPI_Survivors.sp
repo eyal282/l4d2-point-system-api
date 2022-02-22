@@ -10,6 +10,8 @@
 
 #define PLUGIN_VERSION "1.0"
 
+// float g_fNextBuyProduct[MAXPLAYERS + 1];
+
 Handle PointsPistol = INVALID_HANDLE;
 Handle PointsMagnum = INVALID_HANDLE;
 Handle PointsSMG = INVALID_HANDLE;
@@ -57,6 +59,7 @@ Handle PointsPills = INVALID_HANDLE;
 Handle PointsEAmmoPack = INVALID_HANDLE;
 Handle PointsIAmmoPack = INVALID_HANDLE;
 Handle PointsRefill = INVALID_HANDLE;
+
 
 public Plugin myinfo = 
 {
@@ -145,8 +148,45 @@ public void OnPluginStart()
 
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
+	
+	for (int i = 1; i <= MaxClients;i++)
+	{
+		if(!IsClientInGame(i))
+			continue;
+			
+		Func_OnClientPutInServer(i);
+	}
 }
 
+public void OnClientPutInServer(int client)
+{
+	Func_OnClientPutInServer(client);
+}
+
+public void Func_OnClientPutInServer(int client)
+{
+	SDKHook(client, SDKHook_WeaponDropPost, SDKHook_OnWeaponDropPost);
+}
+
+public void SDKHook_OnWeaponDropPost(int client, int weapon)
+{
+	if(weapon == -1 || !IsValidEdict(weapon))
+		return;
+		
+	char sClassname[64];
+	GetEdictClassname(weapon, sClassname, sizeof(sClassname));
+	
+	if(!StrEqual(sClassname, "weapon_gascan"))
+		return;
+		
+	char sTargetname[64];
+	GetEntPropString(weapon, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
+	
+	if(strncmp(sTargetname, "PointSystemAPI", 14) != 0)
+		return;
+		
+	PSAPI_SetGasolineGlow(weapon);
+}
 public void OnConfigsExecuted()
 {
 	CreateSurvivorProducts();
@@ -190,8 +230,9 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 }
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
-public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown)
+public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
+	
 	if(strncmp(sInfo, "give ", 5) == 0)
 	{
 		char sClassname[64];
@@ -199,7 +240,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		ReplaceStringEx(sClassname, sizeof(sClassname), "give ", "weapon_");
 		
 		int iWeapon = GivePlayerItem(target, sClassname);
-		
+
 		if(iWeapon == -1)
 		{
 			PSAPI_ExecuteCheatCommand(target, sInfo);
@@ -208,6 +249,11 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		{
 			// 60 dictates time to delete this weapon if unowned.
 			SetEntPropString(iWeapon, Prop_Data, "m_iName", "PointSystemAPI 60");
+			
+			if(StrEqual(sClassname, "weapon_gascan"))
+			{
+				PSAPI_SetGasolineGlow(iWeapon);
+			}
 		}
 	}
 	
@@ -218,91 +264,91 @@ public void CreateSurvivorProducts()
 {
 	
 	// Pistols
-	int iWeaponsCategory = PS_CreateCategory(-1, "survivors weapons", "Weapons Menu", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	int iWeaponsCategory = PSAPI_CreateCategory(-1, "survivors weapons", "Weapons Menu", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
 	
 	int iCategory = -1;
-	iCategory = PS_CreateCategory(iWeaponsCategory, "survivors pistols", "Pistols", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsPistol), "Pistol", NO_DESCRIPTION, "pistol", "give pistol", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsMagnum), "Magnum", NO_DESCRIPTION, "magnum", "give pistol_magnum", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_BOTTEAM | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors pistols", "Pistols", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPistol), "Pistol", NO_DESCRIPTION, "pistol", "give pistol", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMagnum), "Magnum", NO_DESCRIPTION, "magnum", "give pistol_magnum", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_BOTTEAM | BUYFLAG_INCAP);
 	
 	// Melee
-	iCategory = PS_CreateCategory(iWeaponsCategory, "survivors melee", "Melee", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsBat), "Bat", NO_DESCRIPTION, "bat", "give cricket_bat", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsMachete), "Machete", NO_DESCRIPTION, "machete", "give machete", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsKatana), "Katana", NO_DESCRIPTION, "katana", "give katana", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsTonfa), "Tonfa", NO_DESCRIPTION, "tonfa", "give tonfa", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsFireaxe), "Fireaxe", NO_DESCRIPTION, "fireaxe axe", "give fireaxe", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsKnife), "Knife", NO_DESCRIPTION, "knife", "give knife", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsGuitar), "Guitar", NO_DESCRIPTION, "guitar", "give electric_guitar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsPan), "Pan", NO_DESCRIPTION, "pan", "give frying_pan", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsCrow), "Crowbar", NO_DESCRIPTION, "crow bar crowbar", "give crowbar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsClub), "Golf Club", NO_DESCRIPTION, "golf club", "give golfclub", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsShovel), "Shovel", NO_DESCRIPTION, "shovel", "give shovel", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsPitchfork), "Pitchfork", NO_DESCRIPTION, "fork pitch pitchfork forkpitch", "give pitchfork", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsSaw), "Chainsaw", NO_DESCRIPTION, "chainsaw chain saw", "give chainsaw", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors melee", "Melee", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsBat), "Bat", NO_DESCRIPTION, "bat", "give cricket_bat", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMachete), "Machete", NO_DESCRIPTION, "machete", "give machete", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsKatana), "Katana", NO_DESCRIPTION, "katana", "give katana", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsTonfa), "Tonfa", NO_DESCRIPTION, "tonfa", "give tonfa", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsFireaxe), "Fireaxe", NO_DESCRIPTION, "fireaxe axe", "give fireaxe", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsKnife), "Knife", NO_DESCRIPTION, "knife", "give knife", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsGuitar), "Guitar", NO_DESCRIPTION, "guitar", "give electric_guitar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPan), "Pan", NO_DESCRIPTION, "pan", "give frying_pan", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsCrow), "Crowbar", NO_DESCRIPTION, "crow bar crowbar", "give crowbar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsClub), "Golf Club", NO_DESCRIPTION, "golf club", "give golfclub", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsShovel), "Shovel", NO_DESCRIPTION, "shovel", "give shovel", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPitchfork), "Pitchfork", NO_DESCRIPTION, "fork pitch pitchfork forkpitch", "give pitchfork", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsSaw), "Chainsaw", NO_DESCRIPTION, "chainsaw chain saw", "give chainsaw", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 
 	
 	// Throwables
-	iCategory = PS_CreateCategory(iWeaponsCategory, "survivors throwables", "Throwables", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsPipe), "Pipe Bomb", NO_DESCRIPTION, "pipe pipebomb", "give pipe_bomb", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsMolly), "Molotov", NO_DESCRIPTION, "molotov molly moly cocktail", "give molotov", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsBile), "Bile Bomb", NO_DESCRIPTION, "bile jar", "give vomitjar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors throwables", "Throwables", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPipe), "Pipe Bomb", NO_DESCRIPTION, "pipe pipebomb", "give pipe_bomb", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMolly), "Molotov", NO_DESCRIPTION, "molotov molly moly cocktail", "give molotov", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsBile), "Bile Bomb", NO_DESCRIPTION, "bile jar", "give vomitjar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	
 	
 	// Health Items
-	iCategory = PS_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsKit), "First Aid Kit", NO_DESCRIPTION, "kit med medkit aid", "give first_aid_kit", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsDefib), "Defibrillator", NO_DESCRIPTION, "defib defibrillator defibrilator defibillator defibilator", "give defibrillator", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsAdren), "Adrenaline", NO_DESCRIPTION, "adren adrenaline shot", "give adrenaline", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsPills), "Pills", NO_DESCRIPTION, "pills pill", "give pain_pills", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsKit), "First Aid Kit", NO_DESCRIPTION, "kit med medkit aid", "give first_aid_kit", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP | BUYFLAG_TEAM);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsDefib), "Defibrillator", NO_DESCRIPTION, "defib defibrillator defibrilator defibillator defibilator", "give defibrillator", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsAdren), "Adrenaline", NO_DESCRIPTION, "adren adrenaline shot", "give adrenaline", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP | BUYFLAG_TEAM);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPills), "Pills", NO_DESCRIPTION, "pills pill", "give pain_pills", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	
 	// SMG
-	iCategory = PS_CreateCategory(iWeaponsCategory, "survivors smgs", "SMGs", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsSMG), "SMG", NO_DESCRIPTION, "smg", "give smg", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsSSMG), "Silenced SMG", NO_DESCRIPTION, "ssmg", "give smg_silenced", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsMP5), "MP5", NO_DESCRIPTION, "mp5", "give smg_mp5", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors smgs", "SMGs", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsSMG), "SMG", NO_DESCRIPTION, "smg", "give smg", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsSSMG), "Silenced SMG", NO_DESCRIPTION, "ssmg", "give smg_silenced", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMP5), "MP5", NO_DESCRIPTION, "mp5", "give smg_mp5", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	
 	// Shotguns
-	iCategory = PS_CreateCategory(iWeaponsCategory, "survivors shotguns", "Shotguns", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsPump), "Pump Shotgun", NO_DESCRIPTION, "pump shotgun", "give pumpshotgun", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsChrome), "Chrome Shotgun", NO_DESCRIPTION, "chrome", "give shotgun_chrome", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsAuto), "Auto Shotgun", NO_DESCRIPTION, "auto autoshotgun", "give autoshotgun", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsSpas), "Spas", NO_DESCRIPTION, "spas", "give shotgun_spas", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors shotguns", "Shotguns", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPump), "Pump Shotgun", NO_DESCRIPTION, "pump shotgun", "give pumpshotgun", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsChrome), "Chrome Shotgun", NO_DESCRIPTION, "chrome", "give shotgun_chrome", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsAuto), "Auto Shotgun", NO_DESCRIPTION, "auto autoshotgun", "give autoshotgun", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsSpas), "Spas", NO_DESCRIPTION, "spas", "give shotgun_spas", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP | BUYFLAG_BOTTEAM);
 	
 	// Rifles
-	iCategory = PS_CreateCategory(iWeaponsCategory, "survivors rifles", "Rifles", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsDesert), "Desert Rifle", NO_DESCRIPTION, "desert desertrifle", "give rifle_desert", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsSG), "SG552", NO_DESCRIPTION, "sg sg552 sg556", "give rifle_sg552", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsM16), "M-16", NO_DESCRIPTION, "m16 m4a1 m4a4", "give rifle", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsAK), "AK-47", NO_DESCRIPTION, "ak ak47", "give rifle_ak47", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors rifles", "Rifles", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsDesert), "Desert Rifle", NO_DESCRIPTION, "desert desertrifle", "give rifle_desert", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsSG), "SG552", NO_DESCRIPTION, "sg sg552 sg556", "give rifle_sg552", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsM16), "M-16", NO_DESCRIPTION, "m16 m4a1 m4a4", "give rifle", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP | BUYFLAG_BOTTEAM);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsAK), "AK-47", NO_DESCRIPTION, "ak ak47", "give rifle_ak47", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP | BUYFLAG_BOTTEAM);
 	
 	// Special Rifles
 	
-	iCategory = PS_CreateCategory(iWeaponsCategory, "survivors special rifles", "Special Rifles", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsM60), "M-60", NO_DESCRIPTION, "m60", "give rifle_m60", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsGL), "Grenade Launcher", NO_DESCRIPTION, "gl launcher grenadelauncher grenade", "give grenade_launcher", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors special rifles", "Special Rifles", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsM60), "M-60", NO_DESCRIPTION, "m60", "give rifle_m60", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP | BUYFLAG_TEAM);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsGL), "Grenade Launcher", NO_DESCRIPTION, "gl launcher grenadelauncher grenade rpg", "give grenade_launcher", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP | BUYFLAG_TEAM);
 	
 	
 	// Snipers
-	iCategory = PS_CreateCategory(iWeaponsCategory, "survivors snipers", "Sniper Rifles", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsScout), "Scout", NO_DESCRIPTION, "scout", "give sniper_scout", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsHunting), "Hunting Rifle", NO_DESCRIPTION, "hunting hunt", "give hunting_rifle", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsMilitary), "Military Sniper", NO_DESCRIPTION, "military", "give sniper_military", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsAWP), "AWP", NO_DESCRIPTION, "awp", "give sniper_awp", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors snipers", "Sniper Rifles", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsScout), "Scout", NO_DESCRIPTION, "scout", "give sniper_scout", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsHunting), "Hunting Rifle", NO_DESCRIPTION, "hunting hunt", "give hunting_rifle", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMilitary), "Military Sniper", NO_DESCRIPTION, "military", "give sniper_military", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsAWP), "AWP", NO_DESCRIPTION, "awp", "give sniper_awp", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 
 	// Weapon Upgrades
-	iCategory = PS_CreateCategory(-1, "weapon upgrades", "Weapon Upgrades", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsRefill), "Ammo", NO_DESCRIPTION, "ammo", "give ammo", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsEAmmoPack), "Explosive Ammo Pack", NO_DESCRIPTION, "expack packex", "give upgradepack_explosive", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsIAmmoPack), "Incendiary Ammo Pack", NO_DESCRIPTION, "incpack inpack packinc packin", "give upgradepack_incendiary", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(-1, "weapon upgrades", "Weapon Upgrades", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsRefill), "Ammo", NO_DESCRIPTION, "ammo", "give ammo", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsEAmmoPack), "Explosive Ammo Pack", NO_DESCRIPTION, "expack packex", "give upgradepack_explosive", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsIAmmoPack), "Incendiary Ammo Pack", NO_DESCRIPTION, "incpack inpack packinc packin", "give upgradepack_incendiary", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	
 	// Misc
-	iCategory = PS_CreateCategory(-1, "survivors misc", "Misc Menu", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsGasCan), "Gas Can", "A highly flammable gunpowder filled gas can\nYou cannot fuel anything with this", "gas gascan can", "give gascan", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsPropane), "Propane Tank", NO_DESCRIPTION, "propane", "give propanetank", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsOxy), "Oxygen Tank", NO_DESCRIPTION, "oxy oxygen", "give oxygentank", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsFireWorks), "Fireworks", NO_DESCRIPTION, "fworks fwork fireworks firework", "give fireworkcrate", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PS_CreateProduct(iCategory, GetConVarInt(PointsGnome), "Gnome", NO_DESCRIPTION, "gnome", "give gnome", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	iCategory = PSAPI_CreateCategory(-1, "survivors misc", "Misc Menu", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsGasCan), "Gas Can", "A highly flammable gunpowder filled gas can\nYou cannot fuel anything with this", "gas gascan can", "give gascan", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPropane), "Propane Tank", NO_DESCRIPTION, "propane", "give propanetank", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsOxy), "Oxygen Tank", NO_DESCRIPTION, "oxy oxygen", "give oxygentank", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsFireWorks), "Fireworks", NO_DESCRIPTION, "fworks fwork fireworks firework", "give fireworkcrate", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsGnome), "Gnome", NO_DESCRIPTION, "gnome", "give gnome", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 }
 
 

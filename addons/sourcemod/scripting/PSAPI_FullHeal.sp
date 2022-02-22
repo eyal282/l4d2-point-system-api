@@ -50,8 +50,8 @@ public void OnPluginStart()
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	CreateNative("PS_GetTankHealCount", Native_GetTankHealCount);
-	CreateNative("PS_AddTankHealCount", Native_AddTankHealCount);
+	CreateNative("PSAPI_GetTankHealCount", Native_GetTankHealCount);
+	CreateNative("PSAPI_AddTankHealCount", Native_AddTankHealCount);
 	
 	RegPluginLibrary("PointSystemAPI_FullHeal");
 	return APLRes_Success;
@@ -105,7 +105,7 @@ public void OnLibraryAdded(const char[] name)
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 // If the cost drops below 0, the item is disabled!!!
 // No return
-public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int &iCost, float &fDelay, float &fCooldown)
+public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float &fCost, float &fDelay, float &fCooldown)
 {
 	if(StrEqual(sInfo, "Full Heal"))
 	{
@@ -120,12 +120,12 @@ public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sInfo,
 			if(g_iTankHealsBought[target] + purchases >= GetConVarInt(g_hTankHealMax))
 				purchases = GetConVarInt(g_hTankHealMax) - g_iTankHealsBought[target];
 				
-			iCost *= purchases;
+			fCost *= purchases;
 		}
 	}
 }
 
-public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown)
+public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
 	
 	if(StrEqual(sInfo, "Full Heal") || StrEqual(sInfo, "Partial Heal"))
@@ -153,12 +153,12 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
-public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, int iCost, float fDelay, float fCooldown)
+public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
 	if(StrEqual(sInfo, "Full Heal"))
 	{
 		if(GetClientTeam(target) == view_as<int>(L4DTeam_Survivor) || L4D2_GetPlayerZombieClass(target) != L4D2ZombieClass_Tank)
-			PS_FullHeal(target);
+			PSAPI_FullHeal(target);
 			
 		else
 		{
@@ -181,7 +181,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 	else if(StrEqual(sInfo, "Partial Heal"))
 	{
 		if(GetClientTeam(target) == view_as<int>(L4DTeam_Survivor) || L4D2_GetPlayerZombieClass(target) != L4D2ZombieClass_Tank)
-			PS_FullHeal(target);
+			PSAPI_FullHeal(target);
 			
 		else
 		{
@@ -199,11 +199,11 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 public void CreateProducts()
 {
 
-	int iCategory = PS_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED);
-	PS_CreateProduct(iCategory, g_hHealCost.IntValue, "Heal", "Heals you to max health\nTanks gain less health", "heal", "Partial Heal", 0.0, 0.0,
+	int iCategory = PSAPI_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED);
+	PSAPI_CreateProduct(iCategory, g_hHealCost.FloatValue, "Heal", "Heals you to max health\nTanks gain less health", "heal", "Partial Heal", 0.0, 0.0,
 	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);	
 	
-	PS_CreateProduct(iCategory, g_hHealCost.IntValue, "Full Heal", "Heals you to max health\nFor tanks, as if they spam !buy heal", "fheal fullheal", "Full Heal", 0.0, 0.0,
+	PSAPI_CreateProduct(iCategory, g_hHealCost.FloatValue, "Full Heal", "Heals you to max health\nFor tanks, as if they spam !buy heal", "fheal fullheal", "Full Heal", 0.0, 0.0,
 	BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);	
 }
 

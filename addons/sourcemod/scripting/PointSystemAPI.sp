@@ -10,33 +10,36 @@
 
 #pragma newdecls required
 #define PLUGIN_TITLE	"Point System API"
+float version = 1.0;
 
 ArrayList g_aCategories, g_aProducts;
 
+GlobalForward g_fwOnGetParametersCategory; // Do not print errors here!!!
 GlobalForward g_fwOnGetParametersProduct; // Do not print errors here!!!
 GlobalForward g_fwOnTryBuyProduct; // Calculated before the delay.
 GlobalForward g_fwOnBuyProductPost; // Calculated after the delay.
 GlobalForward g_fwOnShouldGiveProduct; // We should now give the product to the user, because the delay has passed and not refunded.
 
+
+float g_fPoints[MAXPLAYERS+1] = { 0.0, ... };
+float g_fSavedSurvivorPoints[MAXPLAYERS+1], g_fSavedInfectedPoints[MAXPLAYERS+1] = {0.0, ... };
+
 int MultipleDamageStack[MAXPLAYERS+1], SpitterDamageStack[MAXPLAYERS+1];
 float NextMultipleDamage[MAXPLAYERS + 1], NextSpitterDamage[MAXPLAYERS + 1];
 
-int SavedSurvivorPoints[MAXPLAYERS+1], SavedInfectedPoints[MAXPLAYERS+1];
 
-float version = 1.0;
+
+char g_sLastBoughtAlias[MAXPLAYERS + 1];
+char g_sLastBoughtTargetArg[MAXPLAYERS + 1];
 
 char MapName[30];
-//int boughtcost[MAXPLAYERS+1] = { 0, ... };
 int hurtcount[MAXPLAYERS+1] = { 0, ... };
 int protectcount[MAXPLAYERS+1] = { 0, ... };
-//int cost[MAXPLAYERS+1] = { 0, ... };
 int tankburning[MAXPLAYERS+1] = { 0, ... };
 int tankbiled[MAXPLAYERS+1] = { 0, ... };
 int witchburning[MAXPLAYERS+1] = { 0, ... };
-int points[MAXPLAYERS+1] = { 0, ... };
 int killcount[MAXPLAYERS+1] = { 0, ... };
 int headshotcount[MAXPLAYERS+1] = { 0, ... };
-int wassmoker[MAXPLAYERS+1] = { 0, ... };
 //Definitions to save space
 #define ATTACKER int attacker = GetClientOfUserId(GetEventInt(event, "attacker"));
 #define CLIENT int client = GetClientOfUserId(GetEventInt(event, "userid"));
@@ -44,7 +47,6 @@ int wassmoker[MAXPLAYERS+1] = { 0, ... };
 #define CCHECK2 if(client > 0 && !IsFakeClient(client) && GetClientTeam(client) == 2 && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
 #define ACHECK3 if(attacker > 0 && !IsFakeClient(attacker) && GetClientTeam(attacker) == 3 && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
 #define CCHECK3 if(client > 0 && !IsFakeClient(client) && GetClientTeam(client) == 3 && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
-#define NOT_ENOUGH_POINTS "\x04[PS]\x03 Failed! You need \x05%d\x03 more points to buy it! (Σ: \x05%d\x03)"
 //Other
 Handle Enable = INVALID_HANDLE;
 Handle Modes = INVALID_HANDLE;
@@ -129,7 +131,9 @@ public void OnPluginStart()
 	g_aCategories = new ArrayList(sizeof(enCategory));
 	g_aProducts = new ArrayList(sizeof(enProduct));
 	
-	g_fwOnGetParametersProduct = CreateGlobalForward("PointSystemAPI_OnGetParametersProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
+	g_fwOnGetParametersCategory = CreateGlobalForward("PointSystemAPI_OnGetParametersCategory", ET_Event, Param_Cell, Param_String, Param_String);
+	
+	g_fwOnGetParametersProduct = CreateGlobalForward("PointSystemAPI_OnGetParametersProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_String, Param_Cell, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
 	
 	g_fwOnTryBuyProduct = CreateGlobalForward("PointSystemAPI_OnTryBuyProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
 	
@@ -187,6 +191,7 @@ public void OnPluginStart()
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
 	
+	RegConsoleCmd("sm_rebuy", Command_Rebuy);
 	RegConsoleCmd("sm_buystuff", BuyMenu);
 	RegConsoleCmd("sm_buy", BuyMenu);
 	RegConsoleCmd("sm_b", BuyMenu);
@@ -237,9 +242,9 @@ public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const cha
 {
 	int Points = GetConVarInt(IKarma);
 	
-	points[attacker] += Points;
+	g_fPoints[attacker] += float(Points);
 	
-	PrintToChat(attacker, "\x04[PS]\x01 Karma %s'd!!! + \x05%d\x03 points (Total: \x05%d\x03)", KarmaName, Points, points[attacker]);
+	PrintToChat(attacker, "\x04[PS]\x01 Karma %s'd!!! + \x05%d\x03 points (Total: \x05%d\x03)", KarmaName, Points, GetClientPoints(attacker));
 }
 public Action CheckMultipleDamage(Handle hTimer, any number)
 {
@@ -257,7 +262,7 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 		if(GetConVarBool(Notifications) && NextMultipleDamage[i] <= GetEngineTime() && MultipleDamageStack[i] != 0) 
 		{
 			NextMultipleDamage[i] = GetEngineTime() + 10.0;
-			PrintToChat(i, "\x04[PS]\x03 Multiple Damage + \x05%d\x03 points *\x05 %dx\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", GetConVarInt(IHurt), MultipleDamageStack[i] / GetConVarInt(IHurt), MultipleDamageStack[i], points[i]);
+			PrintToChat(i, "\x04[PS]\x03 Multiple Damage + \x05%d\x03 points *\x05 %dx\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", GetConVarInt(IHurt), MultipleDamageStack[i] / GetConVarInt(IHurt), MultipleDamageStack[i], GetClientPoints(i));
 			MultipleDamageStack[i] = 0;
 		}
 	}
@@ -330,14 +335,14 @@ void WipeAllInfected()
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	CreateNative("PS_CreateCategory", Native_CreateCategory);
-	CreateNative("PS_CreateProduct", Native_CreateProduct);
-	CreateNative("PS_FetchProductCostByAlias", Native_FetchProductCostByAlias);
-	CreateNative("PS_GetVersion", Native_GetVersion);
-	CreateNative("PS_SetPoints", Native_SetPoints);
-	CreateNative("PS_HardSetPoints", Native_HardSetPoints);
-	CreateNative("PS_GetPoints", Native_GetPoints);
-	CreateNative("PS_FullHeal", Native_FullHeal);
+	CreateNative("PSAPI_CreateCategory", Native_CreateCategory);
+	CreateNative("PSAPI_CreateProduct", Native_CreateProduct);
+	CreateNative("PSAPI_FetchProductCostByAlias", Native_FetchProductCostByAlias);
+	CreateNative("PSAPI_GetVersion", Native_GetVersion);
+	CreateNative("PSAPI_SetPoints", Native_SetPoints);
+	CreateNative("PSAPI_HardSetPoints", Native_HardSetPoints);
+	CreateNative("PSAPI_GetPoints", Native_GetPoints);
+	CreateNative("PSAPI_FullHeal", Native_FullHeal);
 	
 	RegPluginLibrary("PointSystemAPI");
 	
@@ -370,7 +375,7 @@ public any Native_CreateProduct(Handle plugin, int numParams)
 	enProduct product;
 	
 	product.iCategory = GetNativeCell(1);
-	product.iCost = GetNativeCell(2);
+	product.fCost = float(RoundToFloor(GetNativeCell(2)));
 	
 	
 	GetNativeString(3, product.sName, sizeof(enProduct::sName));
@@ -391,7 +396,7 @@ public any Native_CreateProduct(Handle plugin, int numParams)
 	
 }
 
-public int Native_FetchProductCostByAlias(Handle plugin, int numParams)
+public any Native_FetchProductCostByAlias(Handle plugin, int numParams)
 {
 	char sAlias[64];
 	
@@ -409,18 +414,18 @@ public int Native_FetchProductCostByAlias(Handle plugin, int numParams)
 	alteredProduct = product;
 	
 	Call_PushCell(buyer);
-	Call_PushString(alteredProduct.sInfo);
 	Call_PushString(alteredProduct.sAliases);
+	Call_PushStringEx(alteredProduct.sInfo, sizeof(enProduct::sInfo), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushStringEx(alteredProduct.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushStringEx(alteredProduct.sDescription, sizeof(enProduct::sDescription), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushCell(targetclient);
-	Call_PushCellRef(alteredProduct.iCost);
+	Call_PushCellRef(alteredProduct.fCost);
 	Call_PushFloatRef(alteredProduct.fDelay);
 	Call_PushFloatRef(alteredProduct.fCooldown);
 	
 	Call_Finish();
 	
-	return alteredProduct.iCost;
+	return float(RoundToFloor(alteredProduct.fCost));
 	
 }
 
@@ -432,8 +437,10 @@ public any Native_GetVersion(Handle plugin, int numParams)
 public int Native_SetPoints(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
-	int newval = GetNativeCell(2);
-	points[client] = newval;
+	
+	float newval = GetNativeCell(2);
+	
+	g_fPoints[client] = newval;
 	
 	return true;
 }
@@ -441,19 +448,19 @@ public int Native_SetPoints(Handle plugin, int numParams)
 public int Native_HardSetPoints(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
-	int newval = GetNativeCell(2);
-	points[client] = newval;
-	SavedInfectedPoints[client] = newval;
-	SavedSurvivorPoints[client] = newval;
+	float newval = GetNativeCell(2);
+	g_fPoints[client] = newval;
+	g_fSavedInfectedPoints[client] = newval;
+	g_fSavedSurvivorPoints[client] = newval;
 	
 	return true;
 }
 
 
-public int Native_GetPoints(Handle plugin, int numParams)
+public any Native_GetPoints(Handle plugin, int numParams)
 {
 	int client = GetNativeCell(1);
-	return points[client];
+	return g_fPoints[client];
 }	
 
 public any Native_FullHeal(Handle plugin, int numParams)
@@ -467,13 +474,12 @@ public any Native_FullHeal(Handle plugin, int numParams)
 
 public void OnClientAuthorized(int client, const char[] auth)
 {
-	if(points[client] > GetConVarInt(StartPoints)) return;
-	points[client] = GetConVarInt(StartPoints);
-	SavedSurvivorPoints[client] = GetConVarInt(StartPoints);
-	SavedInfectedPoints[client] = GetConVarInt(StartPoints);
+	if(g_fPoints[client] > GetConVarFloat(StartPoints)) return;
+	g_fPoints[client] = GetConVarFloat(StartPoints);
+	g_fSavedSurvivorPoints[client] = GetConVarFloat(StartPoints);
+	g_fSavedInfectedPoints[client] = GetConVarFloat(StartPoints);
 	if(killcount[client] > 0) return;
 	killcount[client] = 0;
-	wassmoker[client] = 0;
 	hurtcount[client] = 0;
 	protectcount[client] = 0;
 	headshotcount[client] = 0;
@@ -481,6 +487,7 @@ public void OnClientAuthorized(int client, const char[] auth)
 	NextSpitterDamage[client] = 0.0;
 	MultipleDamageStack[client] = 0;
 	SpitterDamageStack[client] = 0;
+	g_sLastBoughtAlias[client][0] = EOS;
 }	
 
 public Action Event_ChangeTeam(Handle event, const char[] name, bool dontBroadcast)
@@ -491,24 +498,23 @@ public Action Event_ChangeTeam(Handle event, const char[] name, bool dontBroadca
 	int oldteam = GetEventInt(event, "oldteam");
 	
 	if(oldteam == 2)
-		SavedSurvivorPoints[client] = points[client];
+		g_fSavedSurvivorPoints[client] = g_fPoints[client];
 		
 	else if(oldteam == 3)
-		SavedInfectedPoints[client] = points[client];
+		g_fSavedInfectedPoints[client] = g_fPoints[client];
 		
 	if ( team == 2 || team == 3)
 	{
 		if(team == 2)
-			points[client] = SavedSurvivorPoints[client];
+			g_fPoints[client] = g_fSavedSurvivorPoints[client];
 			
 		else if(team == 3)
-			points[client] = SavedInfectedPoints[client];
+			g_fPoints[client] = g_fSavedInfectedPoints[client];
 			
 		hurtcount[client] = 0;
 		protectcount[client] = 0;	
 		headshotcount[client] = 0;
 		killcount[client] = 0;
-		wassmoker[client] = 0;
 		NextMultipleDamage[client] = 0.0;
 		MultipleDamageStack[client] = 0;
 	}
@@ -533,10 +539,9 @@ public void OnClientDisconnect(int client)
 {
 	if(IsFakeClient(client)) return;
 	CreateTimer(3.0, Check, client);
-	if(points[client] > GetConVarInt(StartPoints)) return;
-	points[client] = GetConVarInt(StartPoints);
+	if(g_fPoints[client] > GetConVarFloat(StartPoints)) return;
+	g_fPoints[client] = GetConVarFloat(StartPoints);
 	killcount[client] = 0;
-	wassmoker[client] = 0;
 	hurtcount[client] = 0;
 	protectcount[client] = 0;
 	headshotcount[client] = 0;
@@ -546,9 +551,8 @@ public Action Check(Handle Timer, any client)
 {
 	if(!IsClientConnected(client))
 	{
-		points[client] = GetConVarInt(StartPoints);
+		g_fPoints[client] = GetConVarFloat(StartPoints);
 		killcount[client] = 0;
-		wassmoker[client] = 0;
 		hurtcount[client] = 0;
 		protectcount[client] = 0;
 		headshotcount[client] = 0;
@@ -579,14 +583,13 @@ public Action Event_REnd(Handle event, char[] event_name, bool dontBroadcast)
 	{
 		for (int i=1; i<=MaxClients; i++)
 		{
-			points[i] = GetConVarInt(StartPoints);
-			SavedSurvivorPoints[i] = GetConVarInt(StartPoints);
-			SavedInfectedPoints[i] = GetConVarInt(StartPoints);
+			g_fPoints[i] = GetConVarFloat(StartPoints);
+			g_fSavedSurvivorPoints[i] = GetConVarFloat(StartPoints);
+			g_fSavedInfectedPoints[i] = GetConVarFloat(StartPoints);
 			hurtcount[i] = 0;
 			protectcount[i] = 0;
 			headshotcount[i] = 0;
 			killcount[i] = 0;
-			wassmoker[i] = 0;
 		}    
 	}
 	g_bIsAreaStart = false;
@@ -614,23 +617,22 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 {
 	if (!IsModelPrecached("models/w_models/weapons/w_m60.mdl")) PrecacheModel("models/w_models/weapons/w_m60.mdl");
 	if (!IsModelPrecached("models/v_models/v_m60.mdl")) PrecacheModel("models/v_models/v_m60.mdl");
-	int iStartPoints = GetConVarInt(StartPoints);
+	float fStartPoints = GetConVarFloat(StartPoints);
 	
 	if(IsAllowedReset())
 	{
 		for (int i=1; i<=MaxClients; i++)
 		{
-			points[i] = GetConVarInt(StartPoints);
-			SavedSurvivorPoints[i] = iStartPoints;
-			SavedInfectedPoints[i] = iStartPoints;
+			g_fPoints[i] = fStartPoints;
+			g_fSavedSurvivorPoints[i] = fStartPoints;
+			g_fSavedInfectedPoints[i] = fStartPoints;
 			hurtcount[i] = 0;
 			protectcount[i] = 0;
 			headshotcount[i] = 0;
 			killcount[i] = 0;
-			wassmoker[i] = 0;
 		}  
 	}
-	PrintToChatAll("\x04[PS]\x03 Your Start Points: \x05%i", iStartPoints);
+	PrintToChatAll("\x04[PS]\x03 Your Start Points: \x05%.0f", fStartPoints);
 	
 	ResetProductCooldowns();
 	
@@ -644,12 +646,11 @@ public Action Event_Finale(Handle event, char[] event_name, bool dontBroadcast)
 	if(StrEqual(gamemode, "versus", false) || StrEqual(gamemode, "teamversus", false)) return Plugin_Continue;
 	for (int i=1; i<=MaxClients; i++)
 	{
-		points[i] = GetConVarInt(StartPoints);
+		g_fPoints[i] = GetConVarFloat(StartPoints);
 		killcount[i] = 0;
 		hurtcount[i] = 0;
 		protectcount[i] = 0;
 		headshotcount[i] = 0;
-		wassmoker[i] = 0;
 	}
 	
 	return Plugin_Continue;
@@ -678,18 +679,18 @@ public Action Event_Kill(Handle event, const char[] name, bool dontBroadcast)
 		{
 			headshotcount[attacker]++;
 		}	
-		if(headshotcount[attacker] == GetConVarInt(SValueHeadSpree) && GetConVarInt(SValueHeadSpree) > 0)
+		if(headshotcount[attacker] == GetConVarInt(SNumberHead) && GetConVarInt(SValueHeadSpree) > 0)
 		{
-			points[attacker] += GetConVarInt(SValueHeadSpree);
-			headshotcount[attacker] -= GetConVarInt(SNumberHead);
-			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Head Hunter \x05+ %d\x03 points", GetConVarInt(SValueHeadSpree));
+			g_fPoints[attacker] += GetConVarFloat(SValueHeadSpree);
+			headshotcount[attacker] = 0;
+			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Head Hunter \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SValueHeadSpree), GetClientPoints(attacker));
 		}
 		killcount[attacker]++;
 		if(killcount[attacker] == GetConVarInt(SNumberKill) && GetConVarInt(SValueKillingSpree) > 0)
 		{
-			points[attacker] += GetConVarInt(SValueKillingSpree);
-			killcount[attacker] -= GetConVarInt(SNumberKill);
-			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killing Spree \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SValueKillingSpree), points[attacker]);
+			g_fPoints[attacker] += GetConVarFloat(SValueKillingSpree);
+			killcount[attacker] = 0;
+			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killing Spree \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SValueKillingSpree), GetClientPoints(attacker));
 		}
 	}	
 	
@@ -703,8 +704,8 @@ public Action Event_Incap(Handle event, const char[] name, bool dontBroadcast)
 	ACHECK3
 	{
 		if(GetConVarInt(IIncap) == -1) return Plugin_Continue;
-		points[attacker] += GetConVarInt(IIncap);
-		if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Incapped \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", userid, GetConVarInt(IIncap), points[attacker]);
+		g_fPoints[attacker] += GetConVarFloat(IIncap);
+		if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Incapped \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", userid, GetConVarInt(IIncap), GetClientPoints(attacker));
 	}	
 	
 	return Plugin_Continue;
@@ -720,14 +721,14 @@ public Action Event_Death(Handle event, const char[] name, bool dontBroadcast)
 		{
 			if(GetConVarInt(SSIKill) <= 0 || GetClientTeam(client) == 2) return Plugin_Continue;
 			if(GetEntProp(client, Prop_Send, "m_zombieClass") == 8) return Plugin_Continue;
-			points[attacker] += GetConVarInt(SSIKill);
-			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(SSIKill), points[attacker]);
+			g_fPoints[attacker] += GetConVarFloat(SSIKill);
+			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(SSIKill), GetClientPoints(attacker));
 		}
 		if(GetClientTeam(attacker) == 3)
 		{
 			if(GetConVarInt(IKill) <= 0 || GetClientTeam(client) == 3) return Plugin_Continue;
-			points[attacker] += GetConVarInt(IKill);
-			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(IKill), points[attacker]);
+			g_fPoints[attacker] += GetConVarFloat(IKill);
+			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(IKill), GetClientPoints(attacker));
 		}	
 	}	
 	
@@ -742,16 +743,16 @@ public Action Event_TankDeath(Handle event, const char[] name, bool dontBroadcas
 	{
 		if(solo && GetConVarInt(STSolo) > 0)
 		{
-			points[attacker] += GetConVarInt(STSolo);
-			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 TANK SOLO! \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(STSolo), points[attacker]);
+			g_fPoints[attacker] += GetConVarFloat(STSolo);
+			if(GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 TANK SOLO! \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(STSolo), GetClientPoints(attacker));
 		}
 	}
 	for (int i=1; i<=MaxClients; i++)
 	{
-		if(i && IsClientInGame(i)&& !IsFakeClient(i) && IsPlayerAlive(i) && GetClientTeam(i) == 2 && GetConVarInt(STankKill) > 0 && GetConVarInt(Enable) == 1 && IsAllowedGameMode())
+		if(IsClientInGame(i) && !IsFakeClient(i) && IsPlayerAlive(i) && GetClientTeam(i) == 2 && GetConVarInt(STankKill) > 0 && GetConVarInt(Enable) == 1 && IsAllowedGameMode())
 		{
-			points[i] += GetConVarInt(STankKill);
-			if(GetConVarBool(Notifications)) PrintToChat(i, "\x04[PS]\x03 Killed Tank \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(STankKill), points[i]);
+			g_fPoints[i] += GetConVarFloat(STankKill);
+			if(GetConVarBool(Notifications)) PrintToChat(i, "\x04[PS]\x03 Killed Tank \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(STankKill), GetClientPoints(i));
 		}	
 	}
 	tankburning[attacker] = 0;
@@ -767,12 +768,12 @@ public Action Event_WitchDeath(Handle event, const char[] name, bool dontBroadca
 	CCHECK2
 	{
 		if(GetConVarInt(SWitchKill) <= 0) return Plugin_Continue;
-		points[client] += GetConVarInt(SWitchKill);
-		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Killed Witch + \x05%d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SWitchKill), points[client]);
+		g_fPoints[client] += GetConVarFloat(SWitchKill);
+		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Killed Witch + \x05%d\x03 points", GetConVarInt(SWitchKill), GetClientPoints(client));
 		if(oneshot && GetConVarInt(SWitchCrown) > 0)
 		{
-			points[client] += GetConVarInt(SWitchCrown);
-			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Crowned The Witch + \x05%d\x03 points", GetConVarInt(SWitchCrown));
+			g_fPoints[client] += GetConVarFloat(SWitchCrown);
+			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Crowned The Witch + \x05%d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SWitchCrown), GetClientPoints(client));
 		}	
 	}
 	witchburning[client] = 0;
@@ -792,14 +793,14 @@ public Action Event_Heal(Handle event, const char[] name, bool dontBroadcast)
 		if(restored > 39)
 		{
 			if(GetConVarInt(SHeal) <= 0) return Plugin_Continue;
-			points[client] += GetConVarInt(SHeal);
-			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Healed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SHeal), points[client]);
+			g_fPoints[client] += GetConVarFloat(SHeal);
+			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Healed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SHeal), GetClientPoints(client));
 		}
 		else
 		{
 			if(GetConVarInt(SHealWarning) <= 0) return Plugin_Continue;
-			points[client] += GetConVarInt(SHealWarning);
-			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Don't Harvest Heal Points\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SHealWarning));
+			g_fPoints[client] += GetConVarFloat(SHealWarning);
+			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Don't Harvest Heal Points\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SHealWarning), GetClientPoints(client));
 		}
 	}
 		
@@ -816,10 +817,10 @@ public Action Event_Protect(Handle event, const char[] name, bool dontBroadcast)
 		protectcount[client]++;
 		if(protectcount[client] == 6)
 		{
-			points[client] += GetConVarInt(SProtect);
+			g_fPoints[client] += GetConVarFloat(SProtect);
 			protectcount[client] = 0;
 		}	
-		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Protected Teammate\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SProtect), points[client]);
+		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Protected Teammate\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SProtect), GetClientPoints(client));
 	}
 		
 	return Plugin_Continue;
@@ -835,13 +836,13 @@ public Action Event_Revive(Handle event, const char[] name, bool dontBroadcast)
 		if(subject == client) return Plugin_Continue;
 		if(!ledge && GetConVarInt(SRevive) > 0)
         {
-			points[client] += GetConVarInt(SRevive);
-			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Revived \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SRevive), points[client]);
+			g_fPoints[client] += GetConVarFloat(SRevive);
+			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Revived \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SRevive), GetClientPoints(client));
 		}
 		if(ledge && GetConVarInt(SLedge) > 0)
 		{
-			points[client] += GetConVarInt(SLedge);
-			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Revived \x01%N\x03 From Ledge\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SLedge), points[client]);
+			g_fPoints[client] += GetConVarFloat(SLedge);
+			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Revived \x01%N\x03 From Ledge\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SLedge), GetClientPoints(client));
 		}	
 	}
 		
@@ -855,8 +856,8 @@ public Action Event_Shock(Handle event, const char[] name, bool dontBroadcast)
 	CCHECK2
 	{
 		if(GetConVarInt(SDefib) <= 0) return Plugin_Continue;
-		points[client] += GetConVarInt(SDefib);
-		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Defibbed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SDefib), points[client]);
+		g_fPoints[client] += GetConVarFloat(SDefib);
+		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Defibbed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, GetConVarInt(SDefib), GetClientPoints(client));
 	}	
 	
 	return Plugin_Continue;
@@ -868,8 +869,8 @@ public Action Event_Choke(Handle event, const char[] name, bool dontBroadcast)
 	CCHECK3
 	{
 		if(GetConVarInt(IChoke) <= 0) return Plugin_Continue;
-		points[client] += GetConVarInt(IChoke);
-		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Choked Survivor\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IChoke), points[client]);
+		g_fPoints[client] += GetConVarFloat(IChoke);
+		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Choked Survivor\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IChoke), GetClientPoints(client));
 	}
 		
 	return Plugin_Continue;
@@ -883,13 +884,13 @@ public Action Event_Boom(Handle event, const char[] name, bool dontBroadcast)
 	{
 		if(GetClientTeam(attacker) == 3 && GetConVarInt(ITag) > 0)
 		{
-			points[attacker] += GetConVarInt(ITag);
-			if(GetClientTeam(client) == 2 && GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Boomed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(ITag), points[attacker]);
+			g_fPoints[attacker] += GetConVarFloat(ITag);
+			if(GetClientTeam(client) == 2 && GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Boomed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(ITag), GetClientPoints(attacker));
 		}
 		if(GetClientTeam(attacker) == 2 && GetConVarInt(STag) > 0)
 		{
-			points[attacker] += GetConVarInt(STag);
-			if(GetClientTeam(client) == 3 && GetEntProp(client, Prop_Send, "m_zombieClass") == 8 && GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Biled Tank + \x05%d\x03 points (Σ: \x05%d\x03)", GetConVarInt(STag), points[attacker]);
+			g_fPoints[attacker] += GetConVarFloat(STag);
+			if(GetClientTeam(client) == 3 && GetEntProp(client, Prop_Send, "m_zombieClass") == 8 && GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Biled Tank + \x05%d\x03 points (Σ: \x05%d\x03)", GetConVarInt(STag), GetClientPoints(attacker));
 			tankbiled[attacker] = 1;
 		}	
 	}
@@ -903,8 +904,8 @@ public Action Event_Pounce(Handle event, const char[] name, bool dontBroadcast)
 	CCHECK3
 	{
 		if(GetConVarInt(IPounce) <= 0) return Plugin_Continue;
-		points[client] += GetConVarInt(IPounce);
-		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Pounced Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IPounce), points[client]);
+		g_fPoints[client] += GetConVarFloat(IPounce);
+		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Pounced Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IPounce), GetClientPoints(client));
 	}
 		
 	return Plugin_Continue;
@@ -916,8 +917,8 @@ public Action Event_Ride(Handle event, const char[] name, bool dontBroadcast)
 	CCHECK3
 	{
 		if(GetConVarInt(IRide) <= 0) return Plugin_Continue;
-		points[client] += GetConVarInt(IRide);
-		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Jockeyed Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IRide), points[client]);
+		g_fPoints[client] += GetConVarFloat(IRide);
+		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Jockeyed Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(IRide), GetClientPoints(client));
 	}
 		
 	return Plugin_Continue;
@@ -929,8 +930,8 @@ public Action Event_Carry(Handle event, const char[] name, bool dontBroadcast)
 	CCHECK3
 	{
 		if(GetConVarInt(ICarry) <= 0) return Plugin_Continue;
-		points[client] += GetConVarInt(ICarry);
-		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Charged Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(ICarry), points[client]);
+		g_fPoints[client] += GetConVarFloat(ICarry);
+		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Charged Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(ICarry), GetClientPoints(client));
 	}
 		
 	return Plugin_Continue;
@@ -942,8 +943,8 @@ public Action Event_Impact(Handle event, const char[] name, bool dontBroadcast)
 	CCHECK3
 	{
 		if(GetConVarInt(IImpact) <= 0) return Plugin_Continue;
-		points[client] += GetConVarInt(IImpact);
-		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Impacted Survivor \x05+ %d\x03 points(Σ: \x05%d\x03)", GetConVarInt(IImpact), points[client]);
+		g_fPoints[client] += GetConVarFloat(IImpact);
+		if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Impacted Survivor \x05+ %d\x03 points(Σ: \x05%d\x03)", GetConVarInt(IImpact), GetClientPoints(client));
 	}
 	
 	return Plugin_Continue;	
@@ -958,14 +959,14 @@ public Action Event_Burn(Handle event, const char[] name, bool dontBroadcast)
 	{
 		if(StrEqual(victim, "Tank", false) && tankburning[client] == 0 && GetConVarInt(STBurn) > 0)
 		{
-			points[client] += GetConVarInt(STBurn);
-			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Burned The Tank \x05+ %d\x03 points", GetConVarInt(STBurn));
+			g_fPoints[client] += GetConVarFloat(STBurn);
+			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Burned The Tank \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(STBurn), GetClientPoints(client));
 			tankburning[client] = 1;
 		}
 		if(StrEqual(victim, "Witch", false) && witchburning[client] == 0 && GetConVarInt(SWBurn) > 0)
 		{
-			points[client] += GetConVarInt(SWBurn);
-			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Burned The Witch \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SWBurn), points[client]);
+			g_fPoints[client] += GetConVarFloat(SWBurn);
+			if(GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Burned The Witch \x05+ %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SWBurn), GetClientPoints(client));
 			witchburning[client] = 1;
 		}
 	}
@@ -998,7 +999,7 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 		}
 		if(hurtcount[attacker] >= 3)
 		{
-			points[attacker] += GetConVarInt(IHurt);
+			g_fPoints[attacker] += GetConVarFloat(IHurt);
 			
 			MultipleDamageStack[attacker] += GetConVarInt(IHurt);
 			hurtcount[attacker] -= 3;
@@ -1007,6 +1008,17 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 	
 	return Plugin_Continue;
 }	
+
+public Action Command_Rebuy(int client, int args)
+{		
+	// No target, so let's make the target the buyer's userid?
+	if(g_sLastBoughtTargetArg[client][0] == EOS) 
+		FormatEx(g_sLastBoughtTargetArg[client], sizeof(g_sLastBoughtTargetArg[]), "#%i", GetClientUserId(client));
+		
+	PerformPurchaseOnAlias(client, g_sLastBoughtAlias[client], g_sLastBoughtTargetArg[client]);
+	
+	return Plugin_Handled;
+}
 
 public Action BuyMenu(int client, int args)
 {
@@ -1040,6 +1052,10 @@ public Action BuyMenu(int client, int args)
 		
 		TrimString(sArgString);
 		
+		strcopy(g_sLastBoughtAlias[client], sizeof(g_sLastBoughtAlias[]), sFirstArg);
+		
+		strcopy(g_sLastBoughtTargetArg[client], sizeof(g_sLastBoughtTargetArg[]), sArgString);
+		
 		// No target, so let's make the target the buyer's userid?
 		if(sArgString[0] == EOS) 
 			FormatEx(sArgString, sizeof(sArgString), "#%i", GetClientUserId(client));
@@ -1053,7 +1069,7 @@ public Action ShowPoints(int client, int args)
 {
 	if(IsAllowedGameMode() && GetConVarInt(Enable) == 1 && IsClientInGame(client) && IsClientConnected(client) && GetClientTeam(client) > 1 && args == 0)
 	{
-		PrintToChat(client, "\x04[PS]\x03 You have \x05%d\x03 points", points[client]);
+		PrintToChat(client, "\x04[PS]\x03 You have \x05%d\x03 points", GetClientPoints(client));
 	}
 	return Plugin_Handled;
 }
@@ -1294,7 +1310,7 @@ public Action Command_Points(int client, int args)
 		for (int i = 0; i < target_count; i++)
 		{
 			targetclient = target_list[i];
-			points[targetclient] += StringToInt(arg2);
+			g_fPoints[targetclient] += StringToFloat(arg2);
 			char name[33];
 			GetClientName(targetclient, name, sizeof(name)); 
 			ReplyToCommand(client, "\x04[PS]\x03 You gave %i points to %s.", StringToInt(arg2), arg);
@@ -1354,7 +1370,7 @@ public Action Command_SPoints(int client, int args)
 		for (int i = 0; i < target_count; i++)
 		{
 			targetclient = target_list[i];
-			points[targetclient] = StringToInt(arg2);
+			g_fPoints[targetclient] = float(StringToInt(arg2));
 			char name[33];
 			GetClientName(targetclient, name, sizeof(name)); 
 			ReplyToCommand(client, "\x04[PS]\x03 %s's points have been set to: %s", name, arg2);
@@ -1527,14 +1543,15 @@ public Action Command_SendPoints(int client, int args)
 		ReplyToCommand(client, "\x04[PS]\x03 You cannot send points when you're dead.");
 		return Plugin_Handled;
 	}
-	int pointsToSend = StringToInt(arg2);
+	float pointsToSend = float(RoundToFloor(StringToFloat(arg2)));
 	
-	if(pointsToSend <= 0)
+	if(pointsToSend <= 0.0)
 		return Plugin_Handled;
-	if(pointsToSend > points[client])
+		
+	if(pointsToSend > g_fPoints[client])
 	{
 
-		ReplyToCommand(client, "\x04[PS]\x03 You cannot send more points than you have. (\x05%d\x03)", points[client]);
+		ReplyToCommand(client, "\x04[PS]\x03 You cannot send more points than you have. (\x05%d\x03)", GetClientPoints(client));
 		return Plugin_Handled;
 	}
 	char target_name[MAX_TARGET_LENGTH];
@@ -1560,17 +1577,17 @@ public Action Command_SendPoints(int client, int args)
 			if(GetClientTeam(targetclient) != GetClientTeam(client) || targetclient == client || IsFakeClient(targetclient) || (!IsPlayerAlive(targetclient) && IsTeamSurvivor(targetclient)))
 				continue;
 			
-			else if(pointsToSend > points[client])
+			else if(pointsToSend > g_fPoints[client])
 				return Plugin_Handled;
 				
-			points[targetclient] += pointsToSend;
-			points[client] -= pointsToSend;
+			g_fPoints[targetclient] += pointsToSend;
+			g_fPoints[client] -= pointsToSend;
 			
 			char name[33], sendername[33];
 			GetClientName(targetclient, name, sizeof(name)); 
 			GetClientName(client, sendername, sizeof(sendername)); 
-			ReplyToCommand(client, "\x04[PS]\x03 You gave \x05%d\x03 points to %s.", pointsToSend, name);
-			PrintToChat(targetclient, "\x04[PS]\x03 %s gave you \x05%d\x03 points.", sendername, pointsToSend);
+			ReplyToCommand(client, "\x04[PS]\x03 You gave \x05%d\x03 points to %s.", RoundToFloor(pointsToSend), name);
+			PrintToChat(targetclient, "\x04[PS]\x03 %s gave you \x05%d\x03 points.", sendername, RoundToFloor(pointsToSend));
 		}
 	}
 	else
@@ -1585,7 +1602,7 @@ void BuildBuyMenu(int client, int iCategory = -1)
 {
 
 	Handle hMenu = CreateMenu(BuyMenu_Handler);
-	SetMenuTitle(hMenu, "Your Points: %i", points[client]);
+	SetMenuTitle(hMenu, "Your Points: %i", GetClientPoints(client));
 	
 	if(iCategory != -1)
 		SetMenuExitBackButton(hMenu, true);
@@ -1611,10 +1628,29 @@ void BuildBuyMenu(int client, int iCategory = -1)
 		
 		if(PSAPI_GetErrorFromBuyflags(client, "", impostorProduct, _, _, _, bShouldReturn) && bShouldReturn)
 			continue;
+		
+		char sName[64];
+		sName = cat.sName;
+		
+		if(cat.iBuyFlags & BUYFLAG_CUSTOMNAME)
+		{
+			Call_StartForward(g_fwOnGetParametersCategory);
 			
+			enCategory alteredCategory; 
+			alteredCategory = cat;
+			
+			Call_PushCell(client);
+			Call_PushString(alteredCategory.sID);
+			Call_PushStringEx(alteredCategory.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+			
+			Call_Finish();
+			
+			sName = alteredCategory.sName;
+		}
+	
 		char sInfo[128];
 		FormatEx(sInfo, sizeof(sInfo), "c%s", cat.sID); // c for category, p for product
-		AddMenuItem(hMenu, sInfo, cat.sName);
+		AddMenuItem(hMenu, sInfo, sName);
 		bAnyItems = true;
 	}
 	
@@ -1637,7 +1673,32 @@ void BuildBuyMenu(int client, int iCategory = -1)
 		char sDisplay[128], sFirstAlias[32];
 		BreakString(product.sAliases, sFirstAlias, sizeof(sFirstAlias));
 		
-		FormatEx(sDisplay, sizeof(sDisplay), "%s\nChat: !buy %s", product.sName, sFirstAlias);
+		char sName[64];
+		sName = product.sName;
+		
+		if(product.iBuyFlags & BUYFLAG_CUSTOMNAME)
+		{
+			Call_StartForward(g_fwOnGetParametersProduct);
+			
+			enProduct alteredProduct; 
+			alteredProduct = product;
+			
+			Call_PushCell(client);
+			Call_PushString(alteredProduct.sAliases);
+			Call_PushStringEx(alteredProduct.sInfo, sizeof(enProduct::sInfo), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+			Call_PushStringEx(alteredProduct.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+			Call_PushStringEx(alteredProduct.sDescription, sizeof(enProduct::sDescription), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+			Call_PushCell(client);
+			Call_PushCellRef(alteredProduct.fCost);
+			Call_PushFloatRef(alteredProduct.fDelay);
+			Call_PushFloatRef(alteredProduct.fCooldown);
+			
+			Call_Finish();
+			
+			sName = alteredProduct.sName;
+		}
+		
+		FormatEx(sDisplay, sizeof(sDisplay), "%s\nChat: !buy %s", sName, sFirstAlias);
 		AddMenuItem(hMenu, sInfo, sDisplay);
 		bAnyItems = true;
 	}
@@ -1712,21 +1773,22 @@ void ShowConfirmPurchaseMenu(int client, char[] sFirstArg)
 	alteredProduct = product;
 	
 	Call_PushCell(client);
-	Call_PushString(alteredProduct.sInfo);
 	Call_PushString(alteredProduct.sAliases);
-	Call_PushString(alteredProduct.sName);
+	Call_PushStringEx(alteredProduct.sInfo, sizeof(enProduct::sInfo), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(alteredProduct.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(alteredProduct.sDescription, sizeof(enProduct::sDescription), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushCell(client);
-	Call_PushCellRef(alteredProduct.iCost);
+	Call_PushCellRef(alteredProduct.fCost);
 	Call_PushFloatRef(alteredProduct.fDelay);
 	Call_PushFloatRef(alteredProduct.fCooldown);
 	
 	Call_Finish();
 	
-	if(product.sDescription[0] != EOS)
-		SetMenuTitle(hMenu, "Cost: %i\nDescription: %s", product.iCost, product.sDescription);
+	if(alteredProduct.sDescription[0] != EOS)
+		SetMenuTitle(hMenu, "%s\nCost: %i\nDescription: %s\nYour Points: %i", alteredProduct.sName, RoundToFloor(alteredProduct.fCost), alteredProduct.sDescription, GetClientPoints(client));
 		
 	else
-		SetMenuTitle(hMenu, "Cost: %i", alteredProduct.iCost);
+		SetMenuTitle(hMenu, "%s\nCost: %i\nYour Points: %i", alteredProduct.sName, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
 		
 	
 	SetMenuExitBackButton(hMenu, true);
@@ -1913,9 +1975,15 @@ stock int LookupProductByAlias(char[] sAlias, enProduct finalProduct)
 
 stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondArg)
 {
+	if(GetClientTeam(client) != view_as<int>(L4DTeam_Survivor) && GetClientTeam(client) != view_as<int>(L4DTeam_Infected))
+	{
+		PrintToChat(client, "\x04[PS]\x03 Error: You must be in-game!");
+		return;
+	}
 	enProduct product;
 		
 	int productPos = LookupProductByAlias(sFirstArg, product);
+	
 	if(productPos == -1)
 	{
 		PrintToChat(client, "\x04[PS]\x03 Error: Product could not be found!");
@@ -1984,16 +2052,24 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		alteredProduct = product;
 		
 		Call_PushCell(client);
-		Call_PushString(alteredProduct.sInfo);
 		Call_PushString(alteredProduct.sAliases);
-		Call_PushString(alteredProduct.sName);
+		Call_PushStringEx(alteredProduct.sInfo, sizeof(enProduct::sInfo), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+		Call_PushStringEx(alteredProduct.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+		Call_PushStringEx(alteredProduct.sDescription, sizeof(enProduct::sDescription), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 		Call_PushCell(targetclient);
-		Call_PushCellRef(alteredProduct.iCost);
+		Call_PushCellRef(alteredProduct.fCost);
 		Call_PushFloatRef(alteredProduct.fDelay);
 		Call_PushFloatRef(alteredProduct.fCooldown);
 		
 		Call_Finish();
 		
+		alteredProduct.fCost = float(RoundToFloor(alteredProduct.fCost));
+		
+		if(g_fPoints[client] < alteredProduct.fCost)
+		{
+			PrintToChat(client, PSAPI_NOT_ENOUGH_POINTS, RoundToFloor(alteredProduct.fCost - g_fPoints[client]), GetClientPoints(client));
+			continue;
+		}
 		
 		Call_StartForward(g_fwOnTryBuyProduct);
 		
@@ -2002,7 +2078,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		Call_PushString(alteredProduct.sAliases);
 		Call_PushString(alteredProduct.sName);
 		Call_PushCell(targetclient);
-		Call_PushCell(alteredProduct.iCost);
+		Call_PushCell(alteredProduct.fCost);
 		Call_PushFloat(alteredProduct.fDelay);
 		Call_PushFloat(alteredProduct.fCooldown);
 		
@@ -2014,14 +2090,8 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			continue;
 		}
 		
-		if(points[client] < alteredProduct.iCost)
-		{
-			PrintToChat(client, NOT_ENOUGH_POINTS, alteredProduct.iCost - points[client], points[client]);
-			continue;
-		}
-		
 		product.fNextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fCooldown;
-		points[client] -= alteredProduct.iCost;
+		g_fPoints[client] -= alteredProduct.fCost;
 		
 		SetArrayArray(g_aProducts, productPos, product);
 		
@@ -2099,7 +2169,7 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	Call_PushString(alteredProduct.sAliases);
 	Call_PushString(alteredProduct.sName);
 	Call_PushCell(targetclient);
-	Call_PushCell(alteredProduct.iCost);
+	Call_PushCell(alteredProduct.fCost);
 	Call_PushFloat(alteredProduct.fDelay);
 	Call_PushFloat(alteredProduct.fCooldown);
 	
@@ -2108,13 +2178,13 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	
 	if(result >= Plugin_Handled)
 	{
-		points[client] += alteredProduct.iCost;
+		g_fPoints[client] += alteredProduct.fCost;
 		
-		if(alteredProduct.iCost > 0)
+		if(alteredProduct.fCost > 0)
 		{
 			product.fNextBuyProduct[targetclient] = 0.0;
 			SetArrayArray(g_aProducts, productPos, product);
-			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, alteredProduct.iCost, points[client]);		
+			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
 		}
 		
 		return Plugin_Stop;
@@ -2127,7 +2197,7 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	Call_PushString(alteredProduct.sAliases);
 	Call_PushString(alteredProduct.sName);
 	Call_PushCell(targetclient);
-	Call_PushCell(alteredProduct.iCost);
+	Call_PushCell(alteredProduct.fCost);
 	Call_PushFloat(alteredProduct.fDelay);
 	Call_PushFloat(alteredProduct.fCooldown);	
 	
@@ -2135,13 +2205,13 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	
 	if(result >= Plugin_Handled)
 	{
-		points[client] += alteredProduct.iCost;
+		g_fPoints[client] += alteredProduct.fCost;
 		
-		if(alteredProduct.iCost > 0)
+		if(alteredProduct.fCost > 0)
 		{
 			product.fNextBuyProduct[targetclient] = 0.0;
 			SetArrayArray(g_aProducts, productPos, product);
-			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, alteredProduct.iCost, points[client]);		
+			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
 		}
 		
 		return Plugin_Stop;
@@ -2238,4 +2308,9 @@ stock int FindEntityByTargetname(int startEnt, const char[] TargetName, bool cas
 	}
 	
 	return -1;
+}
+
+stock int GetClientPoints(int client)
+{
+	return RoundToFloor(g_fPoints[client]);
 }
