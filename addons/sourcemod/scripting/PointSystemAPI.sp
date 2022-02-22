@@ -1015,6 +1015,7 @@ public Action Command_Rebuy(int client, int args)
 	if(g_sLastBoughtTargetArg[client][0] == EOS) 
 		FormatEx(g_sLastBoughtTargetArg[client], sizeof(g_sLastBoughtTargetArg[]), "#%i", GetClientUserId(client));
 		
+	PrintToChat(client, "%s |%s|", g_sLastBoughtAlias[client], g_sLastBoughtTargetArg[client]);
 	PerformPurchaseOnAlias(client, g_sLastBoughtAlias[client], g_sLastBoughtTargetArg[client]);
 	
 	return Plugin_Handled;
@@ -1719,7 +1720,55 @@ public int BuyMenu_Handler(Handle hMenu, MenuAction action, int client, int item
 	
 	else if(action == MenuAction_Cancel && item == MenuCancel_ExitBack)
 	{
-		BuildBuyMenu(client);
+		char sInfo[256];
+		
+		// Get first item, check which category it belongs to.
+		GetMenuItem(hMenu, 0, sInfo, sizeof(sInfo));
+		
+		bool bCategory = false;
+		
+		if(sInfo[0] == 'c')
+		{
+			bCategory = true;
+			
+			// c for category, p for product
+			ReplaceStringEx(sInfo, sizeof(sInfo), "c", "");
+		}
+		else
+		{
+			// c for category, p for product
+			ReplaceStringEx(sInfo, sizeof(sInfo), "p", "");
+		}
+		
+		int iCurrentCategory = -1;
+		
+		if(bCategory)
+		{
+			int iCategory = FindCategoryByIdentifier(sInfo);
+			
+			enCategory cat;
+			GetArrayArray(g_aCategories, iCategory, cat);
+			
+			iCurrentCategory = cat.iCategory;
+			
+		}
+		else
+		{
+			char sFirstArg[64];
+			
+			BreakString(sInfo, sFirstArg, sizeof(sFirstArg));
+		
+			enProduct product;
+			
+			LookupProductByAlias(sFirstArg, product);
+			
+			iCurrentCategory = product.iCategory;
+		}
+		
+		enCategory curcat;
+		GetArrayArray(g_aCategories, iCurrentCategory, curcat);
+		
+		BuildBuyMenu(client, curcat.iCategory);
 	}
 	else if(action == MenuAction_Select)
 	{
