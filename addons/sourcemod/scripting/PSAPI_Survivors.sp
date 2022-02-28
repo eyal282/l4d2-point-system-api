@@ -225,6 +225,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		return Plugin_Continue;
 		
 	buttons &= ~IN_ATTACK;
+	buttons &= ~IN_USE;
 	return Plugin_Changed;
 
 }
