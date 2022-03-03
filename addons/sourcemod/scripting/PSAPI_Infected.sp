@@ -162,7 +162,7 @@ public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAlias
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 // You should print an error because blocking purchase prints nothing
 // Return Plugin_Handled to block purchase
-public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
+public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown, char[] sError, int iErrorLen)
 {
 	if (StrEqual(sInfo, "Infected Suicide", false))
 	{
@@ -175,7 +175,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 			{
 				if ((!(GetEntityFlags(target) & FL_ONGROUND)))
 				{
-					PrintToChat(target, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself until you reach the ground as a Charger.");
+					FormatEx(sError, iErrorLen, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself until you reach the ground as a Charger.");
 					return Plugin_Handled;
 				}
 			}
@@ -189,7 +189,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 			{
 				if (IsDoubleCharged(iAnyVictim))
 				{
-					PrintToChat(target, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself when pinning a double-charged survivor.");
+					FormatEx(sError, iErrorLen, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself when pinning a double-charged survivor.");
 					return Plugin_Handled;
 				}
 			}
@@ -199,7 +199,6 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 	return Plugin_Continue;
 }
 
-// If a delay exists, called several seconds after PointSystemAPI_OnTryBuyProduct. Otherwise this is called instantly.
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 
 // You should reconsider printing an error because blocking purchase prints a refund point gain.
@@ -285,7 +284,11 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 	}
 	else if (StrEqual(sInfo, "Infected Suicide", false))
 	{
-		ForcePlayerSuicide(target);
+		if (L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank)
+			L4D_ReplaceWithBot(target);
+
+		else
+			ForcePlayerSuicide(target);
 	}
 
 	return Plugin_Continue;

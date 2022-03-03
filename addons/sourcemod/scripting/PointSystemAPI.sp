@@ -14,6 +14,7 @@ float version = 1.0;
 
 ArrayList g_aCategories, g_aProducts;
 
+GlobalForward g_fwOnProductCreated;
 GlobalForward g_fwOnGetParametersCategory;    // Do not print errors here!!!
 GlobalForward g_fwOnGetParametersProduct;     // Do not print errors here!!!
 GlobalForward g_fwOnTryBuyProduct;            // Calculated before the delay.
@@ -122,20 +123,20 @@ public Plugin myinfo =
 	version     = PLUGIN_TITLE,
 	url         = "N/A"
 
+};
 
-}
-
-public void
-	OnPluginStart()
+public void OnPluginStart()
 {
 	g_aCategories = new ArrayList(sizeof(enCategory));
 	g_aProducts   = new ArrayList(sizeof(enProduct));
+
+	g_fwOnProductCreated = CreateGlobalForward("PointSystemAPI_OnProductCreated", ET_Event, Param_Array);
 
 	g_fwOnGetParametersCategory = CreateGlobalForward("PointSystemAPI_OnGetParametersCategory", ET_Event, Param_Cell, Param_String, Param_String);
 
 	g_fwOnGetParametersProduct = CreateGlobalForward("PointSystemAPI_OnGetParametersProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_String, Param_Cell, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
 
-	g_fwOnTryBuyProduct = CreateGlobalForward("PointSystemAPI_OnTryBuyProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
+	g_fwOnTryBuyProduct = CreateGlobalForward("PointSystemAPI_OnTryBuyProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float, Param_String, Param_Cell);
 
 	g_fwOnBuyProductPost = CreateGlobalForward("PointSystemAPI_OnBuyProductPost", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float);
 
@@ -339,6 +340,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("PSAPI_CreateCategory", Native_CreateCategory);
 	CreateNative("PSAPI_CreateProduct", Native_CreateProduct);
 	CreateNative("PSAPI_FindCategoryByIdentifier", Native_FindCategory);
+	CreateNative("PSAPI_CanProductBeBought", Native_CanProductBeBought);
 	CreateNative("PSAPI_FindProductByAlias", Native_FindProduct);
 	CreateNative("PSAPI_FetchProductCostByAlias", Native_FetchProductCostByAlias);
 	CreateNative("PSAPI_GetVersion", Native_GetVersion);
@@ -390,7 +392,22 @@ public any Native_CreateProduct(Handle plugin, int numParams)
 
 	product.iBuyFlags = GetNativeCell(9);
 
+	bool bNoHooks = GetNativeCell(10);
+
 	DeleteProductsByAliases(product.sAliases);
+
+	if (!bNoHooks)
+	{
+		Call_StartForward(g_fwOnProductCreated);
+
+		Call_PushArrayEx(product, sizeof(enProduct), SM_PARAM_COPYBACK);
+
+		Action result;
+		Call_Finish(result);
+
+		if (result >= Plugin_Handled)
+			return false;
+	}
 
 	PushArrayArray(g_aProducts, product);
 
@@ -416,6 +433,107 @@ public any Native_FindCategory(Handle plugin, int numParams)
 		SetNativeArray(2, cat, sizeof(enCategory));
 		return true;
 	}
+}
+
+public any Native_CanProductBeBought(Handle plugin, int numParams)
+{
+	enProduct product;
+
+	char sAlias[32];
+	GetNativeString(1, sAlias, sizeof(sAlias));
+
+	int client       = GetNativeCell(2);
+	int targetclient = GetNativeCell(3);
+
+	if (LookupProductByAlias(sAlias, product) == -1)
+		return false;
+
+	bool bShouldReturn;
+	char sError[256];
+
+	if (PSAPI_GetErrorFromBuyflags(client, sAlias, product, targetclient, sError, sizeof(sError), bShouldReturn))
+		return false;
+
+	Call_StartForward(g_fwOnGetParametersProduct);
+
+	enProduct alteredProduct;
+	alteredProduct = product;
+
+	Call_PushCell(client);
+	Call_PushString(alteredProduct.sAliases);
+	Call_PushStringEx(alteredProduct.sInfo, sizeof(enProduct::sInfo), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(alteredProduct.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(alteredProduct.sDescription, sizeof(enProduct::sDescription), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushCell(targetclient);
+	Call_PushCellRef(alteredProduct.fCost);
+	Call_PushFloatRef(alteredProduct.fDelay);
+	Call_PushFloatRef(alteredProduct.fCooldown);
+
+	Call_Finish();
+
+	alteredProduct.fCost = float(RoundToFloor(alteredProduct.fCost));
+
+	if (g_fPoints[client] < alteredProduct.fCost)
+		return false;
+
+	Call_StartForward(g_fwOnTryBuyProduct);
+
+	Call_PushCell(client);
+	Call_PushString(alteredProduct.sInfo);
+	Call_PushString(alteredProduct.sAliases);
+	Call_PushString(alteredProduct.sName);
+	Call_PushCell(targetclient);
+	Call_PushCell(alteredProduct.fCost);
+	Call_PushFloat(alteredProduct.fDelay);
+	Call_PushFloat(alteredProduct.fCooldown);
+
+	sError[0] = EOS;
+	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushCell(sizeof(sError));
+
+	Action result;
+	Call_Finish(result);
+
+	if (result >= Plugin_Handled)
+		return false;
+
+	if (alteredProduct.iBuyFlags & BUYFLAG_REALTIME_REFUNDS)
+	{
+		Call_StartForward(g_fwOnRealTimeRefundProduct);
+
+		Call_PushCell(client);
+		Call_PushString(alteredProduct.sInfo);
+		Call_PushString(alteredProduct.sAliases);
+		Call_PushString(alteredProduct.sName);
+		Call_PushCell(targetclient);
+		Call_PushCell(alteredProduct.fCost);
+		Call_PushFloat(0.0);
+
+		result = Plugin_Continue;
+		Call_Finish(result);
+
+		if (result >= Plugin_Handled)
+			return false;
+	}
+
+	Call_StartForward(g_fwOnBuyProductPost);
+
+	Call_PushCell(client);
+	Call_PushString(alteredProduct.sInfo);
+	Call_PushString(alteredProduct.sAliases);
+	Call_PushString(alteredProduct.sName);
+	Call_PushCell(targetclient);
+	Call_PushCell(alteredProduct.fCost);
+	Call_PushFloat(alteredProduct.fDelay);
+	Call_PushFloat(alteredProduct.fCooldown);
+
+	result = Plugin_Continue;
+	Call_Finish(result);
+
+	if (result >= Plugin_Handled)
+		return false;
+
+	return true;
 }
 
 public any Native_FindProduct(Handle plugin, int numParams)
@@ -1991,11 +2109,19 @@ stock void ExecuteFullHeal(int client)
 		else if (bIncap)
 		{
 			PSAPI_ExecuteCheatCommand(client, "give health");
+
+			if (L4D_IsPlayerIncapacitated(client))
+				L4D2_VScriptWrapper_ReviveFromIncap(client);
+
 			SetEntityHealthToMax(client);
 		}
 		else
 		{
 			PSAPI_ExecuteCheatCommand(client, "give health");
+
+			if (L4D_IsPlayerIncapacitated(client))
+				L4D2_VScriptWrapper_ReviveFromIncap(client);
+
 			SetEntityHealthToMax(client);
 		}
 	}
@@ -2146,11 +2272,18 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		Call_PushFloat(alteredProduct.fDelay);
 		Call_PushFloat(alteredProduct.fCooldown);
 
+		sError[0] = EOS;
+		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+		Call_PushCell(sizeof(sError));
+
 		Action result;
 		Call_Finish(result);
 
 		if (result >= Plugin_Handled)
 		{
+			if (sError[0] != EOS)
+				PrintToChat(client, sError);
+
 			continue;
 		}
 
@@ -2173,22 +2306,22 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			if (targetclient == client)
 			{
 				if (GetConVarBool(Notifications))
-					PrintToChat(client, "\x04[PS]\x03 Bought\x01 %s\x03 for yourself (Σ: \x05%d\x03)", sFirstArg, GetClientPoints(client));
+					PrintToChat(client, "\x04[PS]\x03 Bought\x04 %s\x03 for yourself (Σ: \x05%d\x03)", sFirstArg, GetClientPoints(client));
 			}
 			else
 			{
-				PrintToChat(client, "\x04[PS]\x03 Successfully bought \x01%s \x03for Player \x01%N\x03 (Σ: \x05%d\x03)", sFirstArg, targetclient, GetClientPoints(client));
-				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03bought you \x01%s", client, sFirstArg);
+				PrintToChat(client, "\x04[PS]\x03 Successfully bought\x05 %s \x03for Player \x01%N\x03 (Σ: \x05%d\x03)", sFirstArg, targetclient, GetClientPoints(client));
+				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03bought you\x04 %s", client, sFirstArg);
 			}
 		}
 		else
 		{
 			hTimer = CreateDataTimer(0.1, Timer_DelayGiveProduct, DP, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 
-			PrintToChat(client, "\x04[PS]\x03 You will buy\x01 %s\x03 for\x04 %s\x01 in %.1fsec", sFirstArg, targetclient == client ? "\x03yourself" : sTargetName, alteredProduct.fDelay);
+			PrintToChat(client, "\x04[PS]\x03 You will buy\x04 %s\x03 for\x04 %s\x01 in %.1fsec", sFirstArg, targetclient == client ? "\x03yourself" : sTargetName, alteredProduct.fDelay);
 
 			if (targetclient != client)
-				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03will buy you \x01%s\x01 in %.1fsec", client, sFirstArg, alteredProduct.fDelay);
+				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03will buy you\x04 %s\x01 in %.1fsec", client, sFirstArg, alteredProduct.fDelay);
 		}
 
 		DP.WriteFloat(alteredProduct.fDelay);

@@ -106,7 +106,8 @@ native int PSAPI_CreateCategory(int iCategory, char[] sID, char[] sName, int iBu
 // The first alias is documented in the buy menu.
 // fCost is rounded to an integer.
 // Each alias is maxed at 32 characters.
-native bool PSAPI_CreateProduct(int iCategory, float fCost, char[] sName, char[] sDescription, char[] sAliases, char[] sInfo, float fDelay, float fCooldown, int iBuyFlags);
+// bNoHooks determines if PSAPI_OnProductCreated should be called. Careful with infinite loops
+native bool PSAPI_CreateProduct(int iCategory, float fCost, char[] sName, char[] sDescription, char[] sAliases, char[] sInfo, float fDelay, float fCooldown, int iBuyFlags, bool bNoHooks = false);
 
 // Finds a category by sID
 // To invoke:
@@ -114,6 +115,8 @@ native bool PSAPI_CreateProduct(int iCategory, float fCost, char[] sName, char[]
 // PSAPI_FindCategoryByIdentifier(sID, cat);
 native bool PSAPI_FindCategoryByIdentifier(const char[] sID, any[] aCat);
 
+// Given an alias, triggers every condition and every global forward except OnShouldGiveProduct to determine if the product is possible to buy.
+native bool PSAPI_CanProductBeBought(const char[] sAlias);
 // Finds a product by one of their aliases.
 // To invoke:
 // enProduct product;
@@ -159,6 +162,11 @@ native void PSAPI_AddTankHealCount(int client, int amount);
 
 // Forwards
 
+// product is a copyback value.
+// Return Plugin_Handled to prevent the product from creation.
+// Does not fire if a product is created with bNoHooks = true
+forward Action PointSystemAPI_OnProductCreated(enProduct product);
+
 // No return
 forward void PointSystemAPI_OnGetParametersCategory(int buyer, const char[] sID, char[] sName);
 
@@ -170,15 +178,15 @@ forward void PointSystemAPI_OnGetParametersCategory(int buyer, const char[] sID,
 forward void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float &fCost, float &fDelay, float &fCooldown);
 
 // sAliases contain the original alias list, to compare your own alias as an identifier.
-// You should print an error because blocking purchase prints nothing
+// This forward is triggered by PSAPI_CanProductBeBought so never to throw an error just format sError.
 // Return Plugin_Handled to block purchase
-forward Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown);
+forward Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown, char[] sError, int iErrorLen);
 
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 // Called every 0.1 seconds during the delay of arrival.
 // Product must have BUYFLAG_REALTIME_REFUNDS.
 // fTimeleft can be 0.0, and in this case, in the same frame PointSystemAPI_OnBuyProductPost will be called, so you don't need PointSystemAPI_OnBuyProductPost if you have this.
-// You should reconsider printing an error because blocking purchase prints a refund point gain.
+// This forward is triggered by PSAPI_CanProductBeBought so never print errors.
 // Return Plugin_Handled to refund purchase
 forward Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fTimeleft)
 	
@@ -186,7 +194,7 @@ forward Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sI
 // If a delay exists, called several seconds after PointSystemAPI_OnTryBuyProduct. Otherwise this is called instantly. 
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 
-// You should reconsider printing an error because blocking purchase prints a refund point gain.
+// This forward is triggered by PSAPI_CanProductBeBought so never print errors.
 // Return Plugin_Handled to refund.
 forward Action PointSystemAPI_OnBuyProductPost(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown);
 	
@@ -194,7 +202,7 @@ forward Action PointSystemAPI_OnBuyProductPost(int buyer, const char[] sInfo, co
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 
 // You should reconsider printing an error because blocking purchase prints a refund point gain.
-// Return Plugin_Handled to refund if you cannot give the product, which should be rare.
+// Return Plugin_Handled to refund if you cannot give the product, which should be rare and may interfere with PSAPI_CanProductBeBought which won't trigger this forward.
 forward Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] info, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown);
 
 
@@ -316,74 +324,74 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct pro
 	
 	if(!(iBuyFlags & BUYFLAG_HUMANTEAM) && target != buyer && !bBot)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy %s for non-bot teammates", sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy\x04 %\x03 for non-bot teammates", sFirstArg);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_BOTTEAM) && target != buyer && bBot)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy %s for bot teammates", sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy\x04 %s\x03 for bot teammates", sFirstArg);
 		return true;
 	}
 	
 
 	else if(!(iBuyFlags & BUYFLAG_INCAP) && bIncap)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be incapped to buy %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be incapped to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
 		return true;
 	}
 	
 	else if(iBuyFlags & BUYFLAG_ONLY_INCAP && !bIncap)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be incapped to buy %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be incapped to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
 		return true;
 	}
 	else if(!(iBuyFlags & BUYFLAG_GHOST) && bGhost)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be %s to buy %s", target == buyer ? "You" : sName, iBuyFlags & BUYFLAG_ALIVE ? "alive" : "dead", sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be %s to buy\x04 %s", target == buyer ? "You" : sName, iBuyFlags & BUYFLAG_ALIVE ? "alive" : "dead", sFirstArg);
 		return true;
 	}
 	else if( ( !(iBuyFlags & BUYFLAG_DEAD_SURVIVORS) && !bAlive && iTeam == L4DTeam_Survivor ) || ( !(iBuyFlags & BUYFLAG_DEAD_INFECTED) && !bAlive && iTeam == L4DTeam_Infected ))
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be alive to buy %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be alive to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_ALIVE) && bAlive)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be dead to buy %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be dead to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_PINNED) && bPinned)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned to buy %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
 		return true;
 	}
 	
 	else if(iBuyFlags & BUYFLAG_ONLY_PINNED && !bPinned)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be pinned to buy %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be pinned to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
 		return true;
 	}
 	
 	// 10 is a constant created by the fact that BUYFLAG_PINNED_SMOKER = (1<< (L4D2ZombieClass_Smoker + 10))
 	else if(pinningClass != view_as<int>(L4D2ZombieClass_NotInfected) && iBuyFlags & (1<< (10 + pinningClass)) != (1<< (10 + pinningClass)))
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned by a %s to buy %s", target == buyer ? "You" : sName, g_sBossNames[pinningClass], sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned by a\x05 %s\x03 to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[pinningClass], sFirstArg);
 		return true;		
 	}
 	else if(!bProperClass)
 	{
 		L4D2ZombieClassType class = L4D2_GetPlayerZombieClass(target);
 		
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be a %s to buy %s", target == buyer ? "You" : sName, g_sBossNames[class], sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be a %s to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[class], sFirstArg);
 		return true;
 	}
 	
 	else if(product.fNextBuyProduct[target] > GetGameTime())
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s is in %.2fsec cooldown for %s", sFirstArg, product.fNextBuyProduct[target] - GetGameTime(), target == buyer ? "You" : sName);
+		FormatEx(sError, iLength, "\x04[PS]\x04 %s\x03 is in %.2fsec cooldown for %s", sFirstArg, product.fNextBuyProduct[target] - GetGameTime(), target == buyer ? "You" : sName);
 		return true;
 	}
 	

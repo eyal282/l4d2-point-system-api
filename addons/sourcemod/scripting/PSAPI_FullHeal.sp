@@ -135,24 +135,25 @@ public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAlias
 	}
 }
 
-public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
+public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown, char[] sError, int iErrorLen)
 {
 	if (StrEqual(sInfo, "Full Heal") || StrEqual(sInfo, "Partial Heal"))
 	{
+		// Need to fix this with incap, as max health is the same when incapped so 100 hp incap = no heal.
 		if (GetEntityHealth(target) == GetEntityMaxHealth(target))
 		{
-			PrintToChat(buyer, "Error: Max Health");
+			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 You are at max health");
 			return Plugin_Handled;
 		}
 
 		else if (GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank && buyer != target)
 		{
-			PrintToChat(buyer, "Error: Tanks must heal themselves because they are limited in buying health.");
+			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 Tanks must heal themselves because they are limited in buying health.");
 			return Plugin_Handled;
 		}
 		else if (GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank && g_iTankHealsBought[target] >= GetConVarInt(g_hTankHealMax))
 		{
-			PrintToChat(buyer, "Error: Max Tank heal limit");
+			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 Max Tank heal limit");
 			return Plugin_Handled;
 		}
 	}
