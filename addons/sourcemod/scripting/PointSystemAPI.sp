@@ -1,7 +1,3 @@
-/* put the line below after all of the includes!
-#pragma newdecls required
-*/
-
 #pragma semicolon 1
 #include <ps_api>
 #include <sdkhooks>
