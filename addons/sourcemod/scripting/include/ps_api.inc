@@ -116,7 +116,7 @@ native bool PSAPI_CreateProduct(int iCategory, float fCost, char[] sName, char[]
 native bool PSAPI_FindCategoryByIdentifier(const char[] sID, any[] aCat);
 
 // Given an alias, triggers every condition and every global forward except OnShouldGiveProduct to determine if the product is possible to buy.
-native bool PSAPI_CanProductBeBought(const char[] sAlias);
+native bool PSAPI_CanProductBeBought(const char[] sAlias, int buyer, int target);
 // Finds a product by one of their aliases.
 // To invoke:
 // enProduct product;
