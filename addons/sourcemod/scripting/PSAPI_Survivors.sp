@@ -62,9 +62,9 @@ Handle PointsRefill    = INVALID_HANDLE;
 
 public Plugin myinfo =
 {
-	name        = "Infected Module --> Point System API",
+	name        = "Survivors Module --> Point System API",
 	author      = "Eyal282",
-	description = "Survivor products that are automatically generated with dumpentityfactories",
+	description = "Survivor products that create physical items",
 	version     = PLUGIN_VERSION,
 	url         = ""
 };
@@ -221,7 +221,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		strcopy(sClassname, sizeof(sClassname), sInfo);
 		ReplaceStringEx(sClassname, sizeof(sClassname), "give ", "weapon_");
 
-		if (StrEqual(sClassname, "weapon_gascan"))
+		if (StrEqual(sClassname, "gascan"))
 		{
 			int iWeapon = CreateSpittableGascan(target);
 
@@ -237,13 +237,16 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 		if (iWeapon == -1)
 		{
-			PSAPI_ExecuteCheatCommand(target, sInfo);
+			// Nobody needs to know... CreateMeleeWeapon can freely create guns.
+			ReplaceStringEx(sClassname, sizeof(sClassname), "weapon_", "");
+			iWeapon = CreateMeleeWeapon(target, sClassname);
 		}
-		else
-		{
-			// 60 dictates time to delete this weapon if unowned.
-			SetEntPropString(iWeapon, Prop_Data, "m_iName", "PointSystemAPI 60");
-		}
+
+		if (iWeapon == -1)
+			return Plugin_Handled;
+
+		// 60 dictates time to delete this weapon if unowned.
+		SetEntPropString(iWeapon, Prop_Data, "m_iName", "PointSystemAPI 60");
 	}
 
 	return Plugin_Continue;
@@ -336,6 +339,7 @@ public void CreateSurvivorProducts()
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsGnome), "Gnome", NO_DESCRIPTION, "gnome", "give gnome", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 }
 
+// -1 for do nothing, 0 for active search
 int g_iCheckEntity = -1;
 
 stock int CreateSpittableGascan(int client)
@@ -358,12 +362,12 @@ stock int CreateSpittableGascan(int client)
 
 	TeleportEntity(iEnt, fOrigin, NULL_VECTOR, NULL_VECTOR);
 
-	g_iCheckEntity = client;
+	g_iCheckEntity = 0;
 	AcceptEntityInput(iEnt, "SpawnItem");
 
 	AcceptEntityInput(iEnt, "Kill");
 
-	if (g_iCheckEntity == client)
+	if (g_iCheckEntity == 0)
 		return -1;
 
 	int iWeapon    = g_iCheckEntity;
@@ -378,9 +382,45 @@ stock int CreateSpittableGascan(int client)
 	return iWeapon;
 }
 
+stock int CreateMeleeWeapon(int client, const char[] sMeleeName)
+{
+	g_iCheckEntity = 0;
+
+	char code[512];
+
+	FormatEx(code, sizeof(code), "ret <- GetPlayerFromUserID(%d).GiveItem(\"%s\"); <RETURN>ret</RETURN>", GetClientUserId(client), sMeleeName);
+
+	char sOutput[512];
+	L4D2_GetVScriptOutput(code, sOutput, sizeof(sOutput));
+
+	if (g_iCheckEntity == 0)
+		return -1;
+
+	int iWeapon    = g_iCheckEntity;
+	g_iCheckEntity = -1;
+
+	if (!IsValidEdict(iWeapon))
+		return -1;
+
+	char sClassname[64];
+	GetEdictClassname(iWeapon, sClassname, sizeof(sClassname));
+
+	// Before making the active search limiter, I sometimes got some instance entity instead of the katana.
+	// PrintToChatAll("Class: %s", sClassname);
+
+	// If you use EquipPlayerWeapon the server will crash :D
+	// EquipPlayerWeapon(client, iWeapon);
+
+	return iWeapon;
+}
+
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if (StrEqual(classname, "weapon_gascan"))
+	// Left4Dhooks may decide to create a logic_script if no other one exists.
+	if (StrEqual(classname, "logic_script"))
+		return;
+
+	else if (g_iCheckEntity == 0)
 		g_iCheckEntity = entity;
 }
 

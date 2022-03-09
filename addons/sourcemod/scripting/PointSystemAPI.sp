@@ -11,12 +11,13 @@ float version = 1.0;
 ArrayList g_aCategories, g_aProducts;
 
 GlobalForward g_fwOnProductCreated;
-GlobalForward g_fwOnGetParametersCategory;    // Do not print errors here!!!
-GlobalForward g_fwOnGetParametersProduct;     // Do not print errors here!!!
-GlobalForward g_fwOnTryBuyProduct;            // Calculated before the delay.
-GlobalForward g_fwOnRealTimeRefundProduct;    // Calculated during the delay.
-GlobalForward g_fwOnBuyProductPost;           // Calculated after the delay.
-GlobalForward g_fwOnShouldGiveProduct;        // We should now give the product to the user, because the delay has passed and not refunded.
+GlobalForward g_fwOnCanBuyProducts;
+GlobalForward g_fwOnGetParametersCategory;
+GlobalForward g_fwOnGetParametersProduct;
+GlobalForward g_fwOnTryBuyProduct;
+GlobalForward g_fwOnRealTimeRefundProduct;
+GlobalForward g_fwOnBuyProductPost;
+GlobalForward g_fwOnShouldGiveProduct;    // We should now give the product to the user, because the delay has passed and not refunded.
 
 float g_fPoints[MAXPLAYERS + 1] = { 0.0, ... };
 float g_fSavedSurvivorPoints[MAXPLAYERS + 1], g_fSavedInfectedPoints[MAXPLAYERS + 1] = { 0.0, ... };
@@ -81,33 +82,10 @@ Handle IIncap             = INVALID_HANDLE;
 Handle IHurt              = INVALID_HANDLE;
 Handle IKill              = INVALID_HANDLE;
 Handle IKarma             = INVALID_HANDLE;
-// Infected buyables
-/*
-Handle PointsJmob = INVALID_HANDLE;
-Handle PointsGoggles = INVALID_HANDLE;
-Handle MaxWitchesAlive = INVALID_HANDLE;
-//Catergory Enables
-Handle CatRifles = INVALID_HANDLE;
-Handle CatSMG = INVALID_HANDLE;
-Handle CatSnipers = INVALID_HANDLE;
-Handle CatShotguns = INVALID_HANDLE;
-Handle CatHealth = INVALID_HANDLE;
-Handle CatUpgrades = INVALID_HANDLE;
-Handle CatThrowables = INVALID_HANDLE;
-Handle CatMisc = INVALID_HANDLE;
-Handle CatMelee = INVALID_HANDLE;
-Handle CatWeapons = INVALID_HANDLE;
 
-//Misc
-Handle TankLimit = INVALID_HANDLE;
-Handle WitchLimit = INVALID_HANDLE;
-*/
-Handle ResetPoints        = INVALID_HANDLE;
-Handle StartPoints        = INVALID_HANDLE;
-// new Handle:ChangeTeam = INVALID_HANDLE;
-// Handle BuyTankHealLimit = INVALID_HANDLE;
-// Handle HelpTimer = INVALID_HANDLE;
-// Handle HelpDelay = INVALID_HANDLE;
+Handle ResetPoints = INVALID_HANDLE;
+Handle StartPoints = INVALID_HANDLE;
+Handle DeadBuy     = INVALID_HANDLE;
 
 bool g_bIsAreaStart = false;
 
@@ -128,9 +106,11 @@ public void OnPluginStart()
 
 	g_fwOnProductCreated = CreateGlobalForward("PointSystemAPI_OnProductCreated", ET_Event, Param_Array);
 
+	g_fwOnCanBuyProducts = CreateGlobalForward("PointSystemAPI_OnCanBuyProducts", ET_Event, Param_Cell, Param_Cell, Param_String, Param_Cell);
+
 	g_fwOnGetParametersCategory = CreateGlobalForward("PointSystemAPI_OnGetParametersCategory", ET_Event, Param_Cell, Param_String, Param_String);
 
-	g_fwOnGetParametersProduct = CreateGlobalForward("PointSystemAPI_OnGetParametersProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_String, Param_Cell, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
+	g_fwOnGetParametersProduct = CreateGlobalForward("PointSystemAPI_OnGetParametersProduct", ET_Ignore, Param_Cell, Param_String, Param_String, Param_String, Param_String, Param_Cell, Param_CellByRef, Param_FloatByRef, Param_FloatByRef);
 
 	g_fwOnTryBuyProduct = CreateGlobalForward("PointSystemAPI_OnTryBuyProduct", ET_Event, Param_Cell, Param_String, Param_String, Param_String, Param_Cell, Param_Cell, Param_Float, Param_Float, Param_String, Param_Cell);
 
@@ -151,6 +131,7 @@ public void OnPluginStart()
 	AutoExecConfig_SetFile("PointSystemAPI");
 
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
+	DeadBuy            = AutoExecConfig_CreateConVar("l4d2_points_dead_buy", "1", "0 - You can't buy products as a dead survivor. 1 - You cannot buy products for other survivors as a dead survivor. 2 - You can buy products as a dead survivor.");
 	Notifications      = AutoExecConfig_CreateConVar("l4d2_points_notify", "1", "Show messages when points are earned?");
 	Enable             = AutoExecConfig_CreateConVar("l4d2_points_enable", "1", "Enable Point System?");
 	Modes              = AutoExecConfig_CreateConVar("l4d2_points_modes", "coop,realism,versus,teamversus", "Which game modes to use Point System");
@@ -196,6 +177,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_b", BuyMenu);
 	RegConsoleCmd("sm_usepoints", BuyMenu);
 	RegConsoleCmd("sm_points", ShowPoints);
+	RegConsoleCmd("sm_teampoints", ShowTeamPoints);
 	RegConsoleCmd("sm_send", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
 	RegConsoleCmd("sm_sendpoints", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
 	RegConsoleCmd("sm_sp", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
@@ -231,19 +213,53 @@ public void OnPluginStart()
 	HookEvent("player_left_start_area", Event_PlayerLeftStartArea, EventHookMode_Post);
 }
 
+// return Plugin_Handled to prevent the user from buying anything.
+public Action PointSystemAPI_OnCanBuyProducts(int buyer, int target, char[] sError, int iErrorLen)
+{
+	if (GetClientTeam(buyer) != view_as<int>(L4DTeam_Survivor))
+		return Plugin_Continue;
+
+	else if (IsPlayerAlive(buyer))
+		return Plugin_Continue;
+
+	switch (GetConVarInt(DeadBuy))
+	{
+		// Cannot buy as dead survivor
+		case 0:
+		{
+			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error: Buy menu cannot be accessed when you're dead!");
+			return view_as<Action>(50);
+		}
+		case 1:
+		{
+			if (buyer != target)
+			{
+				FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error: You can only buy products for yourself when dead!");
+				return view_as<Action>(50);
+			}
+
+			return Plugin_Continue;
+		}
+		default:
+		{
+			return Plugin_Continue;
+		}
+	}
+}
+
 public void L4D_OnServerHibernationUpdate(bool hibernating)
 {
 	if (!hibernating)
 		RegPluginLibrary("PointSystemAPI");
 }
 // Global Forward
-public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName)
+public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName, bool bBird)
 {
 	int Points = GetConVarInt(IKarma);
 
 	g_fPoints[attacker] += float(Points);
 
-	PrintToChat(attacker, "\x04[PS]\x01 Karma %s'd!!! + \x05%d\x03 points (Σ: \x05%d\x03)", KarmaName, Points, GetClientPoints(attacker));
+	PrintToChat(attacker, "\x04[PS]\x01 %s %s'd!!! + \x05%d\x03 points (Σ: \x05%d\x03)", bBird ? "Bird" : "Karma", KarmaName, Points, GetClientPoints(attacker));
 }
 
 public Action CheckMultipleDamage(Handle hTimer, any number)
@@ -1210,6 +1226,36 @@ public Action ShowPoints(int client, int args)
 	return Plugin_Handled;
 }
 
+public Action ShowTeamPoints(int client, int args)
+{
+	if (IsAllowedGameMode() && GetConVarInt(Enable) == 1 && IsClientInGame(client) && IsClientConnected(client) && GetClientTeam(client) > 1 && args == 0)
+	{
+		int count = 0;
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (!IsClientInGame(i))
+				continue;
+
+			else if (IsFakeClient(i))
+				continue;
+
+			else if (GetClientTeam(i) != GetClientTeam(client))
+				continue;
+
+			count += GetClientPoints(i);
+
+			if (client == i)
+				PrintToChat(client, "\x04[PS]\x03 You have \x05%d\x03 points", GetClientPoints(i));
+
+			else
+				PrintToChat(client, "\x04[PS]\x03 %N has \x05%d\x03 points", i, GetClientPoints(i));
+		}
+
+		PrintToChat(client, "\x04[PS]\x03 Total Team Points: %i", count);
+	}
+	return Plugin_Handled;
+}
+
 public Action Command_Heal(int client, int args)
 {
 	if (args > 2)
@@ -1668,6 +1714,7 @@ public Action Command_SendPoints(int client, int args)
 		ReplyToCommand(client, "[SM] Usage: sm_sendpoints <#userid|name> [number of points]");
 		return Plugin_Handled;
 	}
+
 	char arg[MAX_NAME_LENGTH], arg2[10];
 	GetCmdArg(1, arg, sizeof(arg));
 
@@ -1676,22 +1723,14 @@ public Action Command_SendPoints(int client, int args)
 		GetCmdArg(2, arg2, sizeof(arg2));
 	}
 
-	if (!IsPlayerAlive(client) && IsTeamSurvivor(client))
-	{
-		ReplyToCommand(client, "\x04[PS]\x03 You cannot send points when you're dead.");
-		return Plugin_Handled;
-	}
 	float pointsToSend = float(RoundToFloor(StringToFloat(arg2)));
 
 	if (StrContains(arg2, "all", false) != -1)
 		pointsToSend = float(GetClientPoints(client));
 
 	if (pointsToSend <= 0.0)
-		return Plugin_Handled;
-
-	if (pointsToSend > g_fPoints[client])
 	{
-		ReplyToCommand(client, "\x04[PS]\x03 You cannot send more points than you have. (\x05%d\x03)", GetClientPoints(client));
+		PrintToChat(client, "\x04[PS]\x03 Error: Invalid value to send!");
 		return Plugin_Handled;
 	}
 
@@ -1716,11 +1755,40 @@ public Action Command_SendPoints(int client, int args)
 		{
 			targetclient = target_list[i];
 
-			if (GetClientTeam(targetclient) != GetClientTeam(client) || targetclient == client || IsFakeClient(targetclient) || (!IsPlayerAlive(targetclient) && IsTeamSurvivor(targetclient)))
+			if (GetClientTeam(targetclient) != GetClientTeam(client) || targetclient == client || IsFakeClient(targetclient))
 				continue;
 
+			else if (!IsPlayerAlive(targetclient) && IsTeamSurvivor(targetclient))
+			{
+				PrintToChat(client, "\x04[PS]\x03 Error:\x05 %N\x03 is dead.", targetclient);
+				continue;
+			}
+
 			else if (pointsToSend > g_fPoints[client])
+			{
+				PrintToChat(client, "\x04[PS]\x03 Error: Not enough points to send! (Σ: \x05%d\x03)", GetClientPoints(client));
 				return Plugin_Handled;
+			}
+
+			Call_StartForward(g_fwOnCanBuyProducts);
+
+			Call_PushCell(client);
+			Call_PushCell(targetclient);
+
+			char sError[256];
+			Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+			Call_PushCell(sizeof(sError));
+
+			Action result;
+			Call_Finish(result);
+
+			if (result >= Plugin_Handled)
+			{
+				if (sError[0] != EOS)
+					PrintToChat(client, sError);
+
+				continue;
+			}
 
 			g_fPoints[targetclient] += pointsToSend;
 			g_fPoints[client] -= pointsToSend;
@@ -1728,34 +1796,61 @@ public Action Command_SendPoints(int client, int args)
 			char name[33], sendername[33];
 			GetClientName(targetclient, name, sizeof(name));
 			GetClientName(client, sendername, sizeof(sendername));
-			ReplyToCommand(client, "\x04[PS]\x03 You gave \x05%d\x03 points to %s.", RoundToFloor(pointsToSend), name);
-			PrintToChat(targetclient, "\x04[PS]\x03 %s gave you \x05%d\x03 points.", sendername, RoundToFloor(pointsToSend));
+			PrintToChat(client, "\x04[PS]\x03 You gave \x05%d\x03 points to %s. (Σ: \x05%d\x03)", RoundToFloor(pointsToSend), name, GetClientPoints(client));
+			PrintToChat(targetclient, "\x04[PS]\x03 %s gave you \x05%d\x03 points. (Σ: \x05%d\x03)", sendername, RoundToFloor(pointsToSend), GetClientPoints(targetclient));
 		}
 	}
 	else
 	{
 		ReplyToTargetError(client, target_count);
 	}
+
 	return Plugin_Handled;
 }
 
 void BuildBuyMenu(int client, int iCategory = -1)
 {
+	Call_StartForward(g_fwOnCanBuyProducts);
+
+	Call_PushCell(client);
+	Call_PushCell(client);
+
+	char sError[256];
+	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushCell(sizeof(sError));
+
+	Action result;
+	Call_Finish(result);
+
+	if (result >= Plugin_Handled)
+	{
+		if (sError[0] != EOS)
+			PrintToChat(client, sError);
+
+		return;
+	}
+
 	Handle hMenu = CreateMenu(BuyMenu_Handler);
 	SetMenuTitle(hMenu, "Your Points: %i", GetClientPoints(client));
 
 	if (iCategory != -1)
 		SetMenuExitBackButton(hMenu, true);
 
-	int iCategoriesSize = GetArraySize(g_aCategories);
-	int iProductsSize   = GetArraySize(g_aProducts);
+	ArrayList aCategories = g_aCategories.Clone();
+	ArrayList aProducts   = g_aProducts.Clone();
+
+	SortADTArrayCustom(aCategories, SortFunc_enCategory_sName);
+	SortADTArrayCustom(aProducts, SortFunc_enProduct_sName);
+
+	int iCategoriesSize = GetArraySize(aCategories);
+	int iProductsSize   = GetArraySize(aProducts);
 
 	bool bAnyItems = false;
 
 	for (int i = 0; i < iCategoriesSize; i++)
 	{
 		enCategory cat;
-		GetArrayArray(g_aCategories, i, cat);
+		GetArrayArray(aCategories, i, cat);
 
 		if (cat.iCategory != iCategory)
 			continue;
@@ -1783,7 +1878,11 @@ void BuildBuyMenu(int client, int iCategory = -1)
 			Call_PushString(alteredCategory.sID);
 			Call_PushStringEx(alteredCategory.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 
-			Call_Finish();
+			result = Plugin_Continue;
+			Call_Finish(result);
+
+			if (result >= Plugin_Handled)
+				continue;
 
 			sName = alteredCategory.sName;
 		}
@@ -1797,7 +1896,7 @@ void BuildBuyMenu(int client, int iCategory = -1)
 	for (int i = 0; i < iProductsSize; i++)
 	{
 		enProduct product;
-		GetArrayArray(g_aProducts, i, product);
+		GetArrayArray(aProducts, i, product);
 
 		if (product.iCategory != iCategory)
 			continue;
@@ -1843,11 +1942,49 @@ void BuildBuyMenu(int client, int iCategory = -1)
 		bAnyItems = true;
 	}
 
+	CloseHandle(aProducts);
+	CloseHandle(aCategories);
+
 	if (bAnyItems)
 		DisplayMenu(hMenu, client, MENU_TIME_FOREVER);
 
 	else
 		CloseHandle(hMenu);
+}
+
+/**
+ * Sort comparison function for ADT Array elements. Function provides you with
+ * indexes currently being sorted, use ADT Array functions to retrieve the
+ * index values and compare.
+ *
+ * @param index1        First index to compare.
+ * @param index2        Second index to compare.
+ * @param array         Array that is being sorted (order is undefined).
+ * @param hndl          Handle optionally passed in while sorting.
+ * @return              -1 if first should go before second
+ *                      0 if first is equal to second
+ *                      1 if first should go after second
+ */
+public int SortFunc_enCategory_sName(int index1, int index2, Handle array, Handle hndl)
+{
+	enCategory product1;
+	enCategory product2;
+
+	GetArrayArray(array, index1, product1);
+	GetArrayArray(array, index2, product2);
+
+	return strcmp(product1.sName, product2.sName, false);
+}
+
+public int SortFunc_enProduct_sName(int index1, int index2, Handle array, Handle hndl)
+{
+	enProduct product1;
+	enProduct product2;
+
+	GetArrayArray(array, index1, product1);
+	GetArrayArray(array, index2, product2);
+
+	return strcmp(product1.sName, product2.sName, false);
 }
 
 public int BuyMenu_Handler(Handle hMenu, MenuAction action, int client, int item)
@@ -2104,7 +2241,7 @@ stock void ExecuteFullHeal(int client)
 		}
 		else if (bIncap)
 		{
-			PSAPI_ExecuteCheatCommand(client, "give health");
+			FullyHealPlayer(client);
 
 			if (L4D_IsPlayerIncapacitated(client))
 				L4D2_VScriptWrapper_ReviveFromIncap(client);
@@ -2113,7 +2250,7 @@ stock void ExecuteFullHeal(int client)
 		}
 		else
 		{
-			PSAPI_ExecuteCheatCommand(client, "give health");
+			FullyHealPlayer(client);
 
 			if (L4D_IsPlayerIncapacitated(client))
 				L4D2_VScriptWrapper_ReviveFromIncap(client);
@@ -2134,6 +2271,15 @@ stock void SetEntityHealthToMax(int entity)
 	SetEntityHealth(entity, GetEntProp(entity, Prop_Send, "m_iMaxHealth"));
 }
 
+stock void FullyHealPlayer(int client)
+{
+	char code[512];
+
+	FormatEx(code, sizeof(code), "ret <- GetPlayerFromUserID(%d).GiveItem(\"health\"); <RETURN>ret</RETURN>", GetClientUserId(client));
+
+	char sOutput[512];
+	L4D2_GetVScriptOutput(code, sOutput, sizeof(sOutput));
+}
 stock int LookupProductByAlias(char[] sAlias, enProduct finalProduct)
 {
 	int iSize = GetArraySize(g_aProducts);
@@ -2167,6 +2313,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		PrintToChat(client, "\x04[PS]\x03 Error: You must be in-game!");
 		return;
 	}
+
 	enProduct product;
 
 	int productPos = LookupProductByAlias(sFirstArg, product);
@@ -2218,7 +2365,27 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 	{
 		int targetclient = target_list[i];
 
+		Call_StartForward(g_fwOnCanBuyProducts);
+
+		Call_PushCell(client);
+		Call_PushCell(targetclient);
+
 		char sError[256];
+		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+		Call_PushCell(sizeof(sError));
+
+		Action result;
+		Call_Finish(result);
+
+		if (result >= Plugin_Handled)
+		{
+			if (sError[0] != EOS)
+				PrintToChat(client, sError);
+
+			return;
+		}
+
+		sError[0] = EOS;
 		bool bShouldReturn;
 
 		if (PSAPI_GetErrorFromBuyflags(client, sFirstArg, product, targetclient, sError, sizeof(sError), bShouldReturn))
@@ -2272,7 +2439,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 		Call_PushCell(sizeof(sError));
 
-		Action result;
+		result = Plugin_Continue;
 		Call_Finish(result);
 
 		if (result >= Plugin_Handled)
@@ -2363,6 +2530,21 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 
 	if (alteredProduct.iBuyFlags & BUYFLAG_REALTIME_REFUNDS)
 	{
+		Call_StartForward(g_fwOnCanBuyProducts);
+
+		Call_PushCell(client);
+		Call_PushCell(targetclient);
+
+		char sError[256];
+		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+		Call_PushCell(sizeof(sError));
+
+		Action result;
+		Call_Finish(result);
+
+		if (result >= Plugin_Handled)
+			return Plugin_Handled;
+
 		Call_StartForward(g_fwOnRealTimeRefundProduct);
 
 		Call_PushCell(client);
@@ -2373,7 +2555,7 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 		Call_PushCell(alteredProduct.fCost);
 		Call_PushFloat(fTimeleft);
 
-		Action result;
+		result = Plugin_Continue;
 		Call_Finish(result);
 
 		if (result >= Plugin_Handled)
@@ -2394,6 +2576,21 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	if (fTimeleft > 0.0)
 		return Plugin_Continue;
 
+	Call_StartForward(g_fwOnCanBuyProducts);
+
+	Call_PushCell(client);
+	Call_PushCell(targetclient);
+
+	char sError[256];
+	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushCell(sizeof(sError));
+
+	Action result;
+	Call_Finish(result);
+
+	if (result >= Plugin_Handled)
+		return Plugin_Handled;
+
 	Call_StartForward(g_fwOnBuyProductPost);
 
 	Call_PushCell(client);
@@ -2405,7 +2602,7 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	Call_PushFloat(alteredProduct.fDelay);
 	Call_PushFloat(alteredProduct.fCooldown);
 
-	Action result;
+	result = Plugin_Continue;
 	Call_Finish(result);
 
 	if (result >= Plugin_Handled)

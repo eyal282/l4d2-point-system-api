@@ -223,7 +223,7 @@ stock int PSAPI_GetTeamHumansCount(L4DTeam team, bool bAliveOnly)
 		else if(IsFakeClient(i))
 			continue;
 			
-		else if(GetClientTeam(i) != view_as<int>(team))
+		else if(L4D_GetClientTeam(i) != team)
 			continue;
 			
 		else if(bAliveOnly && !IsPlayerAlive(i))
@@ -247,7 +247,7 @@ stock float PSAPI_GetTeamPoints(L4DTeam team, bool bAliveOnly)
 		else if(IsFakeClient(i))
 			continue;
 			
-		else if(GetClientTeam(i) != view_as<int>(team))
+		else if(L4D_GetClientTeam(i) != team)
 			continue;
 			
 		else if(bAliveOnly && !IsPlayerAlive(i))
@@ -286,7 +286,7 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct pro
 		target = buyer;
 		
 	int iBuyFlags = product.iBuyFlags;
-	L4DTeam iTeam = view_as<L4DTeam>(GetClientTeam(buyer));
+	L4DTeam iTeam = L4D_GetClientTeam(buyer);
 	
 	if(product.fCost < 0.0)
 	{
@@ -404,7 +404,7 @@ stock bool PSAPI_IsProperZombieClassForProduct(int client, enProduct product)
 	if(!IsPlayerAlive(client))
 		return true;
 		
-	else if(GetClientTeam(client) == view_as<int>(L4DTeam_Survivor))
+	else if(L4D_GetClientTeam(client) == L4DTeam_Survivor)
 		return true;
 		
 	return view_as<bool>(product.iBuyFlags & view_as<int>(L4D2_GetPlayerZombieClass(client)));
@@ -420,20 +420,28 @@ stock bool PSAPI_SpawnInfectedBossByClassname(int client, const char[] name, boo
 	// Regardless of bGhost, we switch to ghost. If not ghost, we materialize.
 	
 	// Multi tanks will create utter chaos if we don't first swap to a non-tank class prior to spawning the player.
-	L4D_SetClass(client, view_as<int>(L4D2ZombieClass_Charger));
-	L4D2_SetPlayerZombieClass(client, L4D2ZombieClass_Charger);
+	for (int i = 0; i < sizeof(g_sBossClassnames);i++)
+	{
+		if(StrEqual(g_sBossClassnames[i], name))
+		{
+			L4D_SetClass(client, i);
+			L4D2_SetPlayerZombieClass(client, view_as<L4D2ZombieClassType>(i));
+		}
+	}
 
 	float fOrigin[3];
 	GetEntPropVector(client, Prop_Data, "m_vecOrigin", fOrigin);
 
 	L4D_State_Transition(client, STATE_GHOST);
-		
+
+	// isRelocating and isCulling are not a solution to make a no pick, you can only respawn yourself and then swap to ghost as the only solution.
+	// isRelocating is not 100% grasped by me, but isCulling checks if a living player can teleport and become ghost for being too far away from survivors.
+	// isCulling is not a player that already pressed E to teleport as a living player.
+	//SetEntProp(client, Prop_Send, "m_isCulling", bNoPick);
+	//SetEntProp(client, Prop_Send, "m_isRelocating", bNoPick);
+
 	if(bNoPick)
 	{
-		// To confuse ZCS into thinking we pressed E to teleport after being far from survivors.
-		SetEntProp(client, Prop_Send, "m_isCulling", bNoPick);
-		SetEntProp(client, Prop_Send, "m_isRelocating", bNoPick);
-
 		// Respawn is required to make ZCS think we relocated. Must put state transition above to ensure spec2ghost take the OnEnterGhostState
 		L4D_RespawnPlayer(client);
 
@@ -443,7 +451,7 @@ stock bool PSAPI_SpawnInfectedBossByClassname(int client, const char[] name, boo
 		// On top of state transition required to negate RespawnPlayer, you must switch state twice to remove a fake message of "You are too far away from survivors" caused by either isRelocating or isCulling
 		L4D_State_Transition(client, STATE_GHOST);
 	}
-	
+
 	for (int i = 0; i < sizeof(g_sBossClassnames);i++)
 	{
 		if(StrEqual(g_sBossClassnames[i], name))
@@ -464,4 +472,35 @@ stock bool PSAPI_SpawnInfectedBossByClassname(int client, const char[] name, boo
 stock void PSAPI_SetGasolineGlow(int iWeapon)
 {
 	L4D2_SetEntityGlow(iWeapon, L4D2Glow_Constant, 0, 0, { 0, 200, 0 }, true );
+}
+
+stock int PSAPI_GetEntityMaxHealth(int entity)
+{
+	if(PSAPI_IsEntityPlayer(entity))
+	{
+		if(L4D_GetClientTeam(entity) == L4DTeam_Survivor && L4D_IsPlayerIncapacitated(entity))
+		{
+			static ConVar convar;
+			
+			if(convar == null)
+				convar = FindConVar("survivor_incap_health");
+
+			SetEntityHealth(client, convar.IntValue);
+		}
+		else
+			return GetEntProp(entity, Prop_Data, "m_iMaxHealth");
+	}
+	else
+		return GetEntProp(entity, Prop_Data, "m_iMaxHealth");
+}
+
+stock bool PSAPI_IsEntityPlayer(int entity)
+{
+	if (entity <= 0)
+		return false;
+
+	else if (entity > MaxClients)
+		return false;
+
+	return true;
 }

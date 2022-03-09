@@ -59,7 +59,14 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 {
 	if (strncmp(sInfo, "upgrade_add", 11) == 0)
 	{
-		PSAPI_ExecuteCheatCommand(target, sInfo);
+		char sUpgradeNumber[16];
+		strcopy(sUpgradeNumber, sizeof(sUpgradeNumber), sInfo);
+
+		ReplaceStringEx(sUpgradeNumber, sizeof(sUpgradeNumber), "upgrade_add ", "");
+
+		int iWeaponUpgrade = StringToInt(sUpgradeNumber);
+		GiveClientWeaponUpgrade(target, iWeaponUpgrade);
+		// PSAPI_ExecuteCheatCommand(target, sInfo);
 	}
 
 	return Plugin_Continue;
@@ -69,14 +76,24 @@ public void CreateProducts()
 {
 	int iCategory = PSAPI_CreateCategory(-1, "weapon upgrades", "Weapon Upgrades", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE);
 
-	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "exammo expammo", "upgrade_add EXPLOSIVE_AMMO", 0.0, 0.0,
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "exammo expammo", "upgrade_add 1", 0.0, 0.0,
 	                    BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);
 
-	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add INCENDIARY_AMMO", 0.0, 0.0,
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add 0", 0.0, 0.0,
 	                    BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_BOTTEAM);
 
-	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add LASER_SIGHT", 0.0, 0.0,
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add 2", 0.0, 0.0,
 	                    BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_BOTTEAM);
+}
+
+stock void GiveClientWeaponUpgrade(int client, int upgrade)
+{
+	char code[512];
+
+	FormatEx(code, sizeof(code), "ret <- GetPlayerFromUserID(%d).GiveUpgrade(%i); <RETURN>ret</RETURN>", GetClientUserId(client), upgrade);
+
+	char sOutput[512];
+	L4D2_GetVScriptOutput(code, sOutput, sizeof(sOutput));
 }
 
 stock void SetPlayerAlive(int client, bool alive)

@@ -151,12 +151,14 @@ public Action Event_RoundStart(Handle hEvent, const char[] Name, bool dontBroadc
 	return Plugin_Continue;
 }
 
-public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float& fCost, float& fDelay, float& fCooldown)
+public Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float& fCost, float& fDelay, float& fCooldown)
 {
 	if (StrEqual(sInfo, "Terror All Witches Attack"))
 	{
 		fCost = GetConVarFloat(PointsTerrorPerWitch) * L4D2_GetWitchCount();
 	}
+
+	return Plugin_Continue;
 }
 
 // sAliases contain the original alias list, to compare your own alias as an identifier.
@@ -339,7 +341,7 @@ public void CreateInfectedProducts()
 	                    BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
 
 	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSuicide), "Suicide", "Instantly kills you", "kill suicide die death", "Infected Suicide", 0.0, 0.0,
-	                    BUYFLAG_INFECTED | BUYFLAG_ANY_ALIVE);
+	                    BUYFLAG_INFECTED | BUYFLAG_ALIVE | BUYFLAG_GHOST);
 }
 
 stock void SetPlayerAlive(int client, bool alive)

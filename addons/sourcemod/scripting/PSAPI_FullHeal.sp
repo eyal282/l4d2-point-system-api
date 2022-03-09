@@ -107,7 +107,7 @@ public void OnLibraryAdded(const char[] name)
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 // If the cost drops below 0, the item is disabled!!!
 // No return
-public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float& fCost, float& fDelay, float& fCooldown)
+public Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float& fCost, float& fDelay, float& fCooldown)
 {
 	if (StrEqual(sInfo, "Full Heal") || StrEqual(sInfo, "Partial Heal"))
 	{
@@ -121,9 +121,9 @@ public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAlias
 	{
 		if (GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank)
 		{
-			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
+			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * PSAPI_GetEntityMaxHealth(target)));
 
-			int iMissingHealth = GetEntityMaxHealth(target) - GetEntityHealth(target);
+			int iMissingHealth = PSAPI_GetEntityMaxHealth(target) - GetEntityHealth(target);
 
 			int purchases = RoundToCeil(float(iMissingHealth) / float(iAmountToHeal));
 
@@ -133,6 +133,8 @@ public void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAlias
 			fCost *= purchases;
 		}
 	}
+
+	return Plugin_Continue;
 }
 
 public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown, char[] sError, int iErrorLen)
@@ -140,24 +142,31 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 	if (StrEqual(sInfo, "Full Heal") || StrEqual(sInfo, "Partial Heal"))
 	{
 		// Need to fix this with incap, as max health is the same when incapped so 100 hp incap = no heal.
-		if (GetEntityHealth(target) == GetEntityMaxHealth(target))
+		if (GetEntityHealth(target) == PSAPI_GetEntityMaxHealth(target) && !L4D_IsPlayerIncapacitated(target) && !L4D_IsPlayerPinned(target))
 		{
 			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 You are at max health");
 			return Plugin_Handled;
 		}
 
-		else if (GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank && buyer != target)
+		else if (GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank)
 		{
-			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 Tanks must heal themselves because they are limited in buying health.");
-			return Plugin_Handled;
-		}
-		else if (GetClientTeam(target) == view_as<int>(L4DTeam_Infected) && L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank && g_iTankHealsBought[target] >= GetConVarInt(g_hTankHealMax))
-		{
-			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 Max Tank heal limit");
-			return Plugin_Handled;
+			if (buyer != target)
+			{
+				FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 Tanks must heal themselves because they are limited in buying health.");
+				return Plugin_Handled;
+			}
+			else if (g_iTankHealsBought[target] >= GetConVarInt(g_hTankHealMax))
+			{
+				FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 Max Tank heal limit");
+				return Plugin_Handled;
+			}
+			else if (L4D_IsPlayerIncapacitated(target))
+			{
+				FormatEx(sError, iErrorLen, "\x04[PS-Anti Exploit]\x03 You cannot heal yourself as a dying tank.");
+				return Plugin_Handled;
+			}
 		}
 	}
-
 	return Plugin_Continue;
 }
 
@@ -172,9 +181,9 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 		else
 		{
-			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
+			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * PSAPI_GetEntityMaxHealth(target)));
 
-			int iMissingHealth = GetEntityMaxHealth(target) - GetEntityHealth(target);
+			int iMissingHealth = PSAPI_GetEntityMaxHealth(target) - GetEntityHealth(target);
 
 			int purchases = RoundToCeil(float(iMissingHealth) / float(iAmountToHeal));
 
@@ -195,7 +204,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 		else
 		{
-			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * GetEntityMaxHealth(target)));
+			int iAmountToHeal = GetConVarInt(g_hTankHealAmount) + RoundFloat(((GetConVarFloat(g_hTankHealPercent) / 100.0) * PSAPI_GetEntityMaxHealth(target)));
 
 			g_iTankHealsBought[target]++;
 
@@ -260,15 +269,19 @@ stock int GetEntityHealth(int entity)
 {
 	return GetEntProp(entity, Prop_Send, "m_iHealth");
 }
-stock int GetEntityMaxHealth(int entity)
-{
-	return GetEntProp(entity, Prop_Send, "m_iMaxHealth");
-}
 
 stock void HealEntity(int entity, int amount)
 {
 	SetEntityHealth(entity, GetEntityHealth(entity) + amount);
+}
 
-	if (GetEntityHealth(entity) > GetEntityMaxHealth(entity))
-		SetEntityHealth(entity, GetEntityMaxHealth(entity));
+stock bool IsEntityPlayer(int entity)
+{
+	if (entity <= 0)
+		return false;
+
+	else if (entity > MaxClients)
+		return false;
+
+	return true;
 }
