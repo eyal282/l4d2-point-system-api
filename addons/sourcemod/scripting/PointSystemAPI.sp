@@ -2469,11 +2469,11 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			if (targetclient == client)
 			{
 				if (GetConVarBool(Notifications))
-					PrintToChat(client, "\x04[PS]\x03 Bought\x04 %s\x03 for yourself (Σ: \x05%d\x03)", sFirstArg, GetClientPoints(client));
+					PrintToChat(client, "\x04[PS]\x03 Bought\x04 %s\x03 for\x01 yourself\x03 (Σ: \x05%d\x03)", alteredProduct.sName, GetClientPoints(client));
 			}
 			else
 			{
-				PrintToChat(client, "\x04[PS]\x03 Successfully bought\x05 %s \x03for Player \x01%N\x03 (Σ: \x05%d\x03)", sFirstArg, targetclient, GetClientPoints(client));
+				PrintToChat(client, "\x04[PS]\x03 Successfully bought\x05 %s \x03for Player \x01%N\x03 (Σ: \x05%d\x03)", alteredProduct.sName, targetclient, GetClientPoints(client));
 				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03bought you\x04 %s", client, sFirstArg);
 			}
 		}
@@ -2481,10 +2481,10 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		{
 			hTimer = CreateDataTimer(0.1, Timer_DelayGiveProduct, DP, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 
-			PrintToChat(client, "\x04[PS]\x03 You will buy\x04 %s\x03 for\x04 %s\x01 in %.1fsec", sFirstArg, targetclient == client ? "\x03yourself" : sTargetName, alteredProduct.fDelay);
+			PrintToChat(client, "\x04[PS]\x03 You will buy\x04 %s\x03 for\x04 %s\x01 in %.1fsec\x03  (Σ: \x05%d\x03)", alteredProduct.sName, targetclient == client ? "\x03yourself" : sTargetName, alteredProduct.fDelay, GetClientPoints(client));
 
 			if (targetclient != client)
-				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03will buy you\x04 %s\x01 in %.1fsec", client, sFirstArg, alteredProduct.fDelay);
+				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03will buy you\x04 %s\x01 in %.1fsec", client, alteredProduct.sName, alteredProduct.fDelay);
 		}
 
 		DP.WriteFloat(alteredProduct.fDelay);

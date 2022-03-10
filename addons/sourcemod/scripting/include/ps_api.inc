@@ -167,15 +167,19 @@ native void PSAPI_AddTankHealCount(int client, int amount);
 // Does not fire if a product is created with bNoHooks = true
 forward Action PointSystemAPI_OnProductCreated(enProduct product);
 
-// No return
-forward void PointSystemAPI_OnGetParametersCategory(int buyer, const char[] sID, char[] sName);
+// return Plugin_Handled or higher to prevent the user from buying anything. Biggest return determines the error message.
+// Buying as a dead player returns 50.
+forward Action PointSystemAPI_OnCanBuyProducts(int buyer, int target, char[] sError, int iErrorLen);
+
+// return Plugin_Handled to hide the category, must have BUYFLAGS_CUSTOMNAME to fire this.
+forward Action PointSystemAPI_OnGetParametersCategory(int buyer, const char[] sID, char[] sName);
 
 // Called even if you cannot afford the product, and even if you didn't try to buy the product'.
 // sAliases contain the original alias list, to compare your own alias as an identifier.
-// If the cost drops below 0, the item is disabled!!!
-// Every cost of an item will always be treated as a whole number.
-// No return
-forward void PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float &fCost, float &fDelay, float &fCooldown);
+// If the cost drops below 0, the product is disabled!!!
+// Every cost of a product will always be treated as a whole number.
+// return Plugin_Handled to disable & hide this product.
+forward Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float &fCost, float &fDelay, float &fCooldown);
 
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 // This forward is triggered by PSAPI_CanProductBeBought so never to throw an error just format sError.
@@ -223,7 +227,7 @@ stock int PSAPI_GetTeamHumansCount(L4DTeam team, bool bAliveOnly)
 		else if(IsFakeClient(i))
 			continue;
 			
-		else if(L4D_GetClientTeam(i) != team)
+		else if(GetClientTeam(i) != view_as<int>(team))
 			continue;
 			
 		else if(bAliveOnly && !IsPlayerAlive(i))
@@ -247,7 +251,7 @@ stock float PSAPI_GetTeamPoints(L4DTeam team, bool bAliveOnly)
 		else if(IsFakeClient(i))
 			continue;
 			
-		else if(L4D_GetClientTeam(i) != team)
+		else if(GetClientTeam(i) != view_as<int>(team))
 			continue;
 			
 		else if(bAliveOnly && !IsPlayerAlive(i))
@@ -286,7 +290,7 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct pro
 		target = buyer;
 		
 	int iBuyFlags = product.iBuyFlags;
-	L4DTeam iTeam = L4D_GetClientTeam(buyer);
+	L4DTeam iTeam = view_as<L4DTeam>(GetClientTeam(buyer));
 	
 	if(product.fCost < 0.0)
 	{
@@ -404,7 +408,7 @@ stock bool PSAPI_IsProperZombieClassForProduct(int client, enProduct product)
 	if(!IsPlayerAlive(client))
 		return true;
 		
-	else if(L4D_GetClientTeam(client) == L4DTeam_Survivor)
+	else if(GetClientTeam(client) == view_as<int>(L4DTeam_Survivor))
 		return true;
 		
 	return view_as<bool>(product.iBuyFlags & view_as<int>(L4D2_GetPlayerZombieClass(client)));
@@ -416,23 +420,23 @@ stock bool PSAPI_SpawnInfectedBossByClassname(int client, const char[] name, boo
 {	
 	if(StrEqual(name, "survivor") || StrEqual(name, "witch"))
 		return false;
-		
-	// Regardless of bGhost, we switch to ghost. If not ghost, we materialize.
 	
 	// Multi tanks will create utter chaos if we don't first swap to a non-tank class prior to spawning the player.
-	for (int i = 0; i < sizeof(g_sBossClassnames);i++)
-	{
-		if(StrEqual(g_sBossClassnames[i], name))
-		{
-			L4D_SetClass(client, i);
-			L4D2_SetPlayerZombieClass(client, view_as<L4D2ZombieClassType>(i));
-		}
-	}
+	
+	L4D_SetClass(client, view_as<int>(L4D2ZombieClass_Charger));
+	L4D2_SetPlayerZombieClass(client, L4D2ZombieClass_Charger);
+
+	// Safety measurements.
+	L4D_State_Transition(client, STATE_DEATH_WAIT_FOR_KEY);
 
 	float fOrigin[3];
 	GetEntPropVector(client, Prop_Data, "m_vecOrigin", fOrigin);
 
+	// Regardless of bGhost, we switch to ghost. If not ghost, we materialize.
+	// We must become ghost prior to sending the event or zcs will wait another 0.1 seconds until we're alive.
 	L4D_State_Transition(client, STATE_GHOST);
+
+
 
 	// isRelocating and isCulling are not a solution to make a no pick, you can only respawn yourself and then swap to ghost as the only solution.
 	// isRelocating is not 100% grasped by me, but isCulling checks if a living player can teleport and become ghost for being too far away from survivors.
@@ -485,7 +489,7 @@ stock int PSAPI_GetEntityMaxHealth(int entity)
 			if(convar == null)
 				convar = FindConVar("survivor_incap_health");
 
-			SetEntityHealth(client, convar.IntValue);
+			return convar.IntValue;
 		}
 		else
 			return GetEntProp(entity, Prop_Data, "m_iMaxHealth");
