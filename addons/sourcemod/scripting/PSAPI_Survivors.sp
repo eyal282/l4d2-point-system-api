@@ -281,7 +281,7 @@ public void CreateSurvivorProducts()
 	// Throwables
 	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors throwables", "Throwables", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPipe), "Pipe Bomb", NO_DESCRIPTION, "pipe pipebomb", "give pipe_bomb", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMolly), "Molotov", NO_DESCRIPTION, "molotov molly moly cocktail", "give molotov", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMolly), "Molotov", NO_DESCRIPTION, "molotov molly moly molo cocktail", "give molotov", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsBile), "Bile Bomb", NO_DESCRIPTION, "bile jar", "give vomitjar", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 
 	// Health Items

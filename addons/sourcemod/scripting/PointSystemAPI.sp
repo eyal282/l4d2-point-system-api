@@ -99,6 +99,13 @@ public Plugin myinfo =
 
 };
 
+// While this is fired after OnPluginStart, everybody should see sm_b is created when they CTRL + F "OnPluginStart"
+public void OnAllPluginsLoaded()
+{
+	if (!CommandExists("sm_b"))
+		RegConsoleCmd("sm_b", BuyMenu);
+}
+
 public void OnPluginStart()
 {
 	g_aCategories = new ArrayList(sizeof(enCategory));
@@ -174,13 +181,15 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_rebuy", Command_Rebuy);
 	RegConsoleCmd("sm_buystuff", BuyMenu);
 	RegConsoleCmd("sm_buy", BuyMenu);
-	RegConsoleCmd("sm_b", BuyMenu);
 	RegConsoleCmd("sm_usepoints", BuyMenu);
+	RegConsoleCmd("sm_blist", Command_BuyList);
+	RegConsoleCmd("sm_buylist", Command_BuyList);
 	RegConsoleCmd("sm_points", ShowPoints);
 	RegConsoleCmd("sm_teampoints", ShowTeamPoints);
 	RegConsoleCmd("sm_send", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
 	RegConsoleCmd("sm_sendpoints", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
 	RegConsoleCmd("sm_sp", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
+	RegConsoleCmd("sm_splist", Command_SendPointsList, "sm_sendpointslist [amount/all]");
 	RegAdminCmd("sm_heal", Command_Heal, ADMFLAG_SLAY, "sm_heal <target> [amount] - Won't reset incaps if you select amount.");
 	RegAdminCmd("sm_incap", Command_Incap, ADMFLAG_SLAY, "sm_incap <target>");
 	RegAdminCmd("sm_setincap", Command_SetIncap, ADMFLAG_SLAY, "sm_setincap <target> <amount left>");
@@ -460,8 +469,23 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 	if (LookupProductByAlias(sAlias, product) == -1)
 		return false;
 
-	bool bShouldReturn;
+	Call_StartForward(g_fwOnCanBuyProducts);
+
+	Call_PushCell(client);
+	Call_PushCell(targetclient);
+
 	char sError[256];
+	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushCell(sizeof(sError));
+
+	Action result;
+	Call_Finish(result);
+
+	if (result >= Plugin_Handled)
+		return false;
+
+	bool bShouldReturn;
+	sError[0] = EOS;
 
 	if (PSAPI_GetErrorFromBuyflags(client, sAlias, product, targetclient, sError, sizeof(sError), bShouldReturn))
 		return false;
@@ -503,7 +527,7 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushCell(sizeof(sError));
 
-	Action result;
+	result = Plugin_Continue;
 	Call_Finish(result);
 
 	if (result >= Plugin_Handled)
@@ -1711,7 +1735,7 @@ public Action Command_SendPoints(int client, int args)
 {
 	if (args < 1 || args > 2)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_sendpoints <#userid|name> [number of points]");
+		ReplyToCommand(client, "[SM] Usage: sm_sendpoints <#userid|name> <points to send>");
 		return Plugin_Handled;
 	}
 
@@ -1806,6 +1830,182 @@ public Action Command_SendPoints(int client, int args)
 	}
 
 	return Plugin_Handled;
+}
+
+public Action Command_SendPointsList(int client, int args)
+{
+	if (args < 1)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_splist <points to send>");
+		return Plugin_Handled;
+	}
+
+	char arg[MAX_NAME_LENGTH];
+	GetCmdArg(1, arg, sizeof(arg));
+
+	float pointsToSend = float(RoundToFloor(StringToFloat(arg)));
+
+	if (StrContains(arg, "all", false) != -1)
+		pointsToSend = float(GetClientPoints(client));
+
+	if (pointsToSend <= 0.0)
+	{
+		PrintToChat(client, "\x04[PS]\x03 Error: Invalid value to send!");
+		return Plugin_Handled;
+	}
+
+	bool bAnyPlayers;
+
+	Handle hMenu = CreateMenu(SPListMenu_Handler);
+
+	SetMenuTitle(hMenu, "Choose a player to send %.0f points to\nYour Points: %i", pointsToSend, GetClientPoints(client));
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i))
+			continue;
+
+		else if (GetClientTeam(i) != GetClientTeam(client) || i == client || IsFakeClient(i))
+			continue;
+
+		Call_StartForward(g_fwOnCanBuyProducts);
+
+		Call_PushCell(client);
+		Call_PushCell(i);
+
+		char sError[1];
+		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+		Call_PushCell(sizeof(sError));
+
+		Action result;
+		Call_Finish(result);
+
+		if (result >= Plugin_Handled)
+			continue;
+
+		char sInfo[24], sName[64];
+		FormatEx(sInfo, sizeof(sInfo), "%i %.0f", GetClientUserId(i), pointsToSend);    // c for category, p for product
+
+		GetClientName(i, sName, sizeof(sName));
+		AddMenuItem(hMenu, sInfo, sName);
+		bAnyPlayers = true;
+	}
+
+	if (bAnyPlayers)
+		DisplayMenu(hMenu, client, MENU_TIME_FOREVER);
+
+	else
+		CloseHandle(hMenu);
+
+	return Plugin_Handled;
+}
+
+public int SPListMenu_Handler(Handle hMenu, MenuAction action, int client, int item)
+{
+	if (action == MenuAction_End)
+		CloseHandle(hMenu);
+
+	else if (action == MenuAction_Select)
+	{
+		char sInfo[24];
+		GetMenuItem(hMenu, item, sInfo, sizeof(sInfo));
+
+		char sUserId[11], sPointsToSend[11];
+
+		int pos = BreakString(sInfo, sUserId, sizeof(sUserId));
+		BreakString(sInfo[pos], sPointsToSend, sizeof(sPointsToSend));
+
+		FakeClientCommand(client, "sm_sp #%i %i", StringToInt(sUserId), StringToInt(sPointsToSend));
+	}
+
+	return 0;
+}
+
+public Action Command_BuyList(int client, int args)
+{
+	if (args < 1)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_buylist <alias>");
+		return Plugin_Handled;
+	}
+
+	char sFirstArg[32];
+	GetCmdArg(1, sFirstArg, sizeof(sFirstArg));
+
+	enProduct product;
+
+	int productPos = LookupProductByAlias(sFirstArg, product);
+
+	if (productPos == -1)
+	{
+		PrintToChat(client, "\x04[PS]\x03 Error: Product could not be found!");
+		return Plugin_Handled;
+	}
+
+	bool bAnyPlayers;
+
+	Handle hMenu = CreateMenu(BuyListMenu_Handler);
+
+	SetMenuTitle(hMenu, "Choose a player to give %s\nYour Points: %i", product.sName, GetClientPoints(client));
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i))
+			continue;
+
+		else if (GetClientTeam(i) != GetClientTeam(client) || i == client || IsFakeClient(i))
+			continue;
+
+		if (!PSAPI_CanProductBeBought(sFirstArg, client, i))
+			continue;
+
+		char sInfo[64], sName[64];
+		FormatEx(sInfo, sizeof(sInfo), "%i %s", GetClientUserId(i), sFirstArg);    // c for category, p for product
+
+		GetClientName(i, sName, sizeof(sName));
+		AddMenuItem(hMenu, sInfo, sName);
+		bAnyPlayers = true;
+	}
+
+	if (bAnyPlayers)
+		DisplayMenu(hMenu, client, MENU_TIME_FOREVER);
+
+	else
+	{
+		CloseHandle(hMenu);
+
+		if (GetClientPoints(client) >= RoundToFloor(PSAPI_FetchProductCostByAlias(sFirstArg, client, client)))
+			PrintToChat(client, "\x04[PS]\x03 Error: Could not find a player to buy for!");
+
+		else
+		{
+			int iCost = RoundToFloor(PSAPI_FetchProductCostByAlias(sFirstArg, client, client));
+			PrintToChat(client, PSAPI_NOT_ENOUGH_POINTS, iCost - GetClientPoints(client), GetClientPoints(client));
+		}
+	}
+
+	return Plugin_Handled;
+}
+
+public int BuyListMenu_Handler(Handle hMenu, MenuAction action, int client, int item)
+{
+	if (action == MenuAction_End)
+		CloseHandle(hMenu);
+
+	else if (action == MenuAction_Select)
+	{
+		char sInfo[64];
+		GetMenuItem(hMenu, item, sInfo, sizeof(sInfo));
+
+		char sUserId[11], sAlias[32];
+
+		int pos = BreakString(sInfo, sUserId, sizeof(sUserId));
+		BreakString(sInfo[pos], sAlias, sizeof(sAlias));
+
+		FakeClientCommand(client, "sm_buy %s #%i", sAlias, StringToInt(sUserId));
+	}
+
+	return 0;
 }
 
 void BuildBuyMenu(int client, int iCategory = -1)
@@ -2385,20 +2585,6 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			return;
 		}
 
-		sError[0] = EOS;
-		bool bShouldReturn;
-
-		if (PSAPI_GetErrorFromBuyflags(client, sFirstArg, product, targetclient, sError, sizeof(sError), bShouldReturn))
-		{
-			PrintToChat(client, sError);
-
-			if (bShouldReturn)
-				return;
-
-			else
-				continue;
-		}
-
 		Call_StartForward(g_fwOnGetParametersProduct);
 
 		enProduct alteredProduct;
@@ -2418,10 +2604,18 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 
 		alteredProduct.fCost = float(RoundToFloor(alteredProduct.fCost));
 
-		if (g_fPoints[client] < alteredProduct.fCost)
+		sError[0] = EOS;
+		bool bShouldReturn;
+
+		if (PSAPI_GetErrorFromBuyflags(client, sFirstArg, alteredProduct, targetclient, sError, sizeof(sError), bShouldReturn))
 		{
-			PrintToChat(client, PSAPI_NOT_ENOUGH_POINTS, RoundToFloor(alteredProduct.fCost - g_fPoints[client]), GetClientPoints(client));
-			continue;
+			PrintToChat(client, sError);
+
+			if (bShouldReturn)
+				return;
+
+			else
+				continue;
 		}
 
 		Call_StartForward(g_fwOnTryBuyProduct);
@@ -2469,22 +2663,27 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			if (targetclient == client)
 			{
 				if (GetConVarBool(Notifications))
-					PrintToChat(client, "\x04[PS]\x03 Bought\x04 %s\x03 for\x01 yourself\x03 (Σ: \x05%d\x03)", alteredProduct.sName, GetClientPoints(client));
+					PrintToChat(client, "\x04[PS]\x03 Bought\x04 %s\x03 for\x05 yourself\x03 (Σ: \x05%d\x03)", alteredProduct.sName, GetClientPoints(client));
 			}
 			else
 			{
-				PrintToChat(client, "\x04[PS]\x03 Successfully bought\x05 %s \x03for Player \x01%N\x03 (Σ: \x05%d\x03)", alteredProduct.sName, targetclient, GetClientPoints(client));
-				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03bought you\x04 %s", client, sFirstArg);
+				PrintToChat(client, "\x04[PS]\x03 Successfully bought\x04 %s\x03 for Player\x05 %N\x03 (Σ: \x05%d\x03)", alteredProduct.sName, targetclient, GetClientPoints(client));
+				PrintToChat(targetclient, "\x04[PS]\x03 Player \x05%N \x03bought you\x04 %s", client, sFirstArg);
 			}
 		}
 		else
 		{
 			hTimer = CreateDataTimer(0.1, Timer_DelayGiveProduct, DP, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 
-			PrintToChat(client, "\x04[PS]\x03 You will buy\x04 %s\x03 for\x04 %s\x01 in %.1fsec\x03  (Σ: \x05%d\x03)", alteredProduct.sName, targetclient == client ? "\x03yourself" : sTargetName, alteredProduct.fDelay, GetClientPoints(client));
-
-			if (targetclient != client)
-				PrintToChat(targetclient, "\x04[PS]\x03 Player \x01%N \x03will buy you\x04 %s\x01 in %.1fsec", client, alteredProduct.sName, alteredProduct.fDelay);
+			if (targetclient == client)
+			{
+				PrintToChat(client, "\x04[PS]\x03 You will buy\x04 %s\x03 for\x05 yourself\x03 in %.1fsec\x03  (Σ: \x05%d\x03)", alteredProduct.sName, alteredProduct.fDelay, GetClientPoints(client));
+			}
+			else
+			{
+				PrintToChat(client, "\x04[PS]\x03 You will buy\x04 %s\x03 for Player\x05 %N\x03 in %.1fsec\x03  (Σ: \x05%d\x03)", alteredProduct.sName, targetclient, alteredProduct.fDelay, GetClientPoints(client));
+				PrintToChat(targetclient, "\x04[PS]\x03 Player \x05%N \x03will buy you\x04 %s\x03 in %.1fsec", client, alteredProduct.sName, alteredProduct.fDelay);
+			}
 		}
 
 		DP.WriteFloat(alteredProduct.fDelay);
