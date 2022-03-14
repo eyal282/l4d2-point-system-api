@@ -294,7 +294,7 @@ public void CreateSurvivorProducts()
 	// SMG
 	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors smgs", "SMGs", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsSMG), "SMG", NO_DESCRIPTION, "smg", "give smg", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsSSMG), "Silenced SMG", NO_DESCRIPTION, "ssmg", "give smg_silenced", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsSSMG), "Silenced SMG", NO_DESCRIPTION, "ssmg silent silenced", "give smg_silenced", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMP5), "MP5", NO_DESCRIPTION, "mp5", "give smg_mp5", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 
 	// Shotguns
