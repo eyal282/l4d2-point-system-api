@@ -1193,14 +1193,15 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 
 public Action Command_PointSystem(int client, int args)
 {
-	PrintToChat(client, "Use\x03 sm_buy <alias> [target]\x01 to buy products.");
+	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_buy <alias> [target]\x03 to buy products.");
 
 	if (CommandExists("sm_autobuy"))
-		PrintToChat(client, "Use\x03 sm_autobuy\x01 to buy certain survivor products automatically");
+		PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_autobuy\x03 to buy certain survivor products automatically");
 
-	PrintToChat(client, "Use\x03 sm_sp\x01 to send points for your teammates");
-	PrintToChat(client, "Use\x03 sm_splist / sm_buylist\x01 if your teammates have weird names");
-	PrintToChat(client, "Use\x03 sm_alias\x01 if you want to find a better alias for a product");
+	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_sp\x03 to send points for your teammates");
+	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_splist / sm_buylist\x03 if your teammates have weird names");
+	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_alias\x03 if you want to find a better alias for a product");
+
 	return Plugin_Handled;
 }
 
