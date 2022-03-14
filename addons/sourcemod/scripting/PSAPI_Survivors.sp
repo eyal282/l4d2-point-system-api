@@ -266,7 +266,7 @@ public void CreateSurvivorProducts()
 	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors melee", "Melee", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsBat), "Bat", NO_DESCRIPTION, "bat", "give cricket_bat", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMachete), "Machete", NO_DESCRIPTION, "machete", "give machete", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
-	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsKatana), "Katana", NO_DESCRIPTION, "katana", "give katana", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsKatana), "Katana", NO_DESCRIPTION, "katana kat japan", "give katana", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsTonfa), "Tonfa", NO_DESCRIPTION, "tonfa", "give tonfa", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsFireaxe), "Fireaxe", NO_DESCRIPTION, "fireaxe axe", "give fireaxe", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsKnife), "Knife", NO_DESCRIPTION, "knife", "give knife", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER);
