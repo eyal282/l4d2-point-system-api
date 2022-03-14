@@ -224,12 +224,12 @@ public void CreateProducts()
 		char sDescription[256];
 		FormatEx(sDescription, sizeof(sDescription), "Heals you to max health\nTanks gain less health\nBoomers and Spitters pay %i%% the price", RoundFloat(GetConVarFloat(g_hBoomerRatioCost) * 100.0));
 
-		PSAPI_CreateProduct(iCategory, g_hHealCost.FloatValue, "Heal", sDescription, "heal", "Partial Heal", 0.0, 0.0,
+		PSAPI_CreateProduct(iCategory, g_hHealCost.FloatValue, "Heal", sDescription, "heal health", "Partial Heal", 0.0, 0.0,
 		                    BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED | BUYFLAG_TEAM);
 
 		FormatEx(sDescription, sizeof(sDescription), "Heals you to max health\nFor tanks, as if they spam !buy heal\nBoomers and Spitters pay %i%% the price", RoundFloat(GetConVarFloat(g_hBoomerRatioCost) * 100.0));
 
-		PSAPI_CreateProduct(iCategory, g_hHealCost.FloatValue, "Full Heal", sDescription, "fheal fullheal", "Full Heal", 0.0, 0.0,
+		PSAPI_CreateProduct(iCategory, g_hHealCost.FloatValue, "Full Heal", sDescription, "fheal fullheal full", "Full Heal", 0.0, 0.0,
 		                    BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED | BUYFLAG_TEAM);
 	}
 	else

@@ -260,7 +260,7 @@ public void CreateSurvivorProducts()
 	int iCategory = -1;
 	iCategory     = PSAPI_CreateCategory(iWeaponsCategory, "survivors pistols", "Pistols", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsPistol), "Pistol", NO_DESCRIPTION, "pistol", "give pistol", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
-	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMagnum), "Magnum", NO_DESCRIPTION, "magnum", "give pistol_magnum", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_BOTTEAM | BUYFLAG_INCAP);
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsMagnum), "Magnum", NO_DESCRIPTION, "magnum deagle eagle", "give pistol_magnum", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_BOTTEAM | BUYFLAG_INCAP);
 
 	// Melee
 	iCategory = PSAPI_CreateCategory(iWeaponsCategory, "survivors melee", "Melee", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
