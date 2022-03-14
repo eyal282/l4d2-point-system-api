@@ -284,22 +284,21 @@ stock void PSAPI_ExecuteCheatCommand(int client, const char[] command, any ...)
 
 // Target == 0 for buyer
 // Sneaking in a fake product requires to populate: iBuyFlags, fNextBuyProduct[MAXPLAYERS+1]
-stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct product, int target=0, char[] sError="", int iLength=0, bool &bShouldReturn=false)
+stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct alteredProduct, int target=0, char[] sError="", int iLength=0, bool &bShouldReturn=false)
 {
 	if(target == 0)
 		target = buyer;
 		
-	int iBuyFlags = product.iBuyFlags;
+	int iBuyFlags = alteredProduct.iBuyFlags;
 	L4DTeam iTeam = view_as<L4DTeam>(GetClientTeam(buyer));
 	
-	if(product.fCost < 0.0)
+	if(alteredProduct.fCost < 0.0)
 	{
 		FormatEx(sError, iLength, "\x04[PS]\x03 Error: This product is disabled!", iBuyFlags & BUYFLAG_SURVIVOR ? "Survivors" : "Infected");
 		bShouldReturn = true;
 		return true;
 	}
-	
-	if( (iBuyFlags & BUYFLAG_INFECTED != BUYFLAG_INFECTED && iTeam == L4DTeam_Infected) || (!(iBuyFlags & BUYFLAG_SURVIVOR) && iTeam == L4DTeam_Survivor))
+	else if( (iBuyFlags & BUYFLAG_INFECTED != BUYFLAG_INFECTED && iTeam == L4DTeam_Infected) || (!(iBuyFlags & BUYFLAG_SURVIVOR) && iTeam == L4DTeam_Survivor))
 	{
 		FormatEx(sError, iLength, "\x04[PS]\x03 Error: Only %s can buy this!", iBuyFlags & BUYFLAG_SURVIVOR ? "Survivors" : "Infected");
 		bShouldReturn = true;
@@ -307,7 +306,13 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct pro
 	}
 	else if(!(iBuyFlags & BUYFLAG_TEAM) && target != buyer)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy %s for teammates", sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy %s for teammates", alteredProduct.sName);
+		return true;
+	}
+	else if(PSAPI_GetPoints(buyer) < alteredProduct.fCost)
+	{
+		FormatEx(sError, iLength, PSAPI_NOT_ENOUGH_POINTS, RoundToFloor(alteredProduct.fCost) - RoundToFloor(PSAPI_GetPoints(buyer)), RoundToFloor(PSAPI_GetPoints(buyer)))
+
 		return true;
 	}
 	
@@ -320,7 +325,7 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct pro
 	bool bIncap = L4D_IsPlayerIncapacitated(target);
 	int pinningClient = L4D_GetPinnedInfected(target);
 	int pinningClass = view_as<int>(L4D2ZombieClass_NotInfected);
-	bool bProperClass = PSAPI_IsProperZombieClassForProduct(target, product);
+	bool bProperClass = PSAPI_IsProperZombieClassForProduct(target, alteredProduct);
 	
 	if(pinningClient > 0)
 		pinningClass = view_as<int>(L4D2_GetPlayerZombieClass(pinningClient));
@@ -328,74 +333,74 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct pro
 	
 	if(!(iBuyFlags & BUYFLAG_HUMANTEAM) && target != buyer && !bBot)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy\x04 %\x03 for non-bot teammates", sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy\x04 %s\x03 for non-bot teammates", alteredProduct.sName);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_BOTTEAM) && target != buyer && bBot)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy\x04 %s\x03 for bot teammates", sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy\x04 %s\x03 for bot teammates", alteredProduct.sName);
 		return true;
 	}
 	
 
 	else if(!(iBuyFlags & BUYFLAG_INCAP) && bIncap)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be incapped to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be incapped to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	else if(iBuyFlags & BUYFLAG_ONLY_INCAP && !bIncap)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be incapped to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be incapped to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	else if(!(iBuyFlags & BUYFLAG_GHOST) && bGhost)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be %s to buy\x04 %s", target == buyer ? "You" : sName, iBuyFlags & BUYFLAG_ALIVE ? "alive" : "dead", sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be %s to buy\x04 %s", target == buyer ? "You" : sName, iBuyFlags & BUYFLAG_ALIVE ? "alive" : "dead", alteredProduct.sName);
 		return true;
 	}
 	else if( ( !(iBuyFlags & BUYFLAG_DEAD_SURVIVORS) && !bAlive && iTeam == L4DTeam_Survivor ) || ( !(iBuyFlags & BUYFLAG_DEAD_INFECTED) && !bAlive && iTeam == L4DTeam_Infected ))
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be alive to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be alive to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_ALIVE) && bAlive)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be dead to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be dead to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_PINNED) && bPinned)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	else if(iBuyFlags & BUYFLAG_ONLY_PINNED && !bPinned)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be pinned to buy\x04 %s", target == buyer ? "You" : sName, sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be pinned to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	// 10 is a constant created by the fact that BUYFLAG_PINNED_SMOKER = (1<< (L4D2ZombieClass_Smoker + 10))
 	else if(pinningClass != view_as<int>(L4D2ZombieClass_NotInfected) && iBuyFlags & (1<< (10 + pinningClass)) != (1<< (10 + pinningClass)))
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned by a\x05 %s\x03 to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[pinningClass], sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned by a\x05 %s\x03 to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[pinningClass], alteredProduct.sName);
 		return true;		
 	}
 	else if(!bProperClass)
 	{
 		L4D2ZombieClassType class = L4D2_GetPlayerZombieClass(target);
 		
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be a %s to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[class], sFirstArg);
+		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be a %s to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[class], alteredProduct.sName);
 		return true;
 	}
 	
-	else if(product.fNextBuyProduct[target] > GetGameTime())
+	else if(alteredProduct.fNextBuyProduct[target] > GetGameTime())
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x04 %s\x03 is in %.2fsec cooldown for %s", sFirstArg, product.fNextBuyProduct[target] - GetGameTime(), target == buyer ? "You" : sName);
+		FormatEx(sError, iLength, "\x04[PS]\x04 %s\x03 is in %.2fsec cooldown for %s", alteredProduct.sName, alteredProduct.fNextBuyProduct[target] - GetGameTime(), target == buyer ? "You" : sName);
 		return true;
 	}
 	

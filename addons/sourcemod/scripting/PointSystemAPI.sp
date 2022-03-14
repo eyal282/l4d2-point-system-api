@@ -178,7 +178,12 @@ public void OnPluginStart()
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
 
+	RegConsoleCmd("sm_ps", Command_PointSystem);
 	RegConsoleCmd("sm_rebuy", Command_Rebuy);
+	RegConsoleCmd("sm_shortcuts", Command_Aliases);
+	RegConsoleCmd("sm_shortcut", Command_Aliases);
+	RegConsoleCmd("sm_alias", Command_Aliases);
+	RegConsoleCmd("sm_aliases", Command_Aliases);
 	RegConsoleCmd("sm_buystuff", BuyMenu);
 	RegConsoleCmd("sm_buy", BuyMenu);
 	RegConsoleCmd("sm_usepoints", BuyMenu);
@@ -1186,6 +1191,19 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 	return Plugin_Continue;
 }
 
+public Action Command_PointSystem(int client, int args)
+{
+	PrintToChat(client, "Use\x03 sm_buy <alias> [target]\x01 to buy products.");
+
+	if (CommandExists("sm_autobuy"))
+		PrintToChat(client, "Use\x03 sm_autobuy\x01 to buy certain survivor products automatically");
+
+	PrintToChat(client, "Use\x03 sm_sp\x01 to send points for your teammates");
+	PrintToChat(client, "Use\x03 sm_splist / sm_buylist\x01 if your teammates have weird names");
+	PrintToChat(client, "Use\x03 sm_alias\x01 if you want to find a better alias for a product");
+	return Plugin_Handled;
+}
+
 public Action Command_Rebuy(int client, int args)
 {
 	// No target, so let's make the target the buyer's userid?
@@ -1194,6 +1212,32 @@ public Action Command_Rebuy(int client, int args)
 
 	PerformPurchaseOnAlias(client, g_sLastBoughtAlias[client], g_sLastBoughtTargetArg[client]);
 
+	return Plugin_Handled;
+}
+
+public Action Command_Aliases(int client, int args)
+{
+	if (args == 0)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_alias <alias>");
+		return Plugin_Handled;
+	}
+
+	char sFirstArg[32];
+
+	GetCmdArg(1, sFirstArg, sizeof(sFirstArg));
+
+	enProduct product;
+
+	int productPos = LookupProductByAlias(sFirstArg, product);
+
+	if (productPos == -1)
+	{
+		PrintToChat(client, "\x04[PS]\x03 Error: Product could not be found!");
+		return Plugin_Handled;
+	}
+
+	PrintToChat(client, "\x04[PS]\x03 List of aliases for %s seperated by spaces:\n\x05%s", product.sName, product.sAliases);
 	return Plugin_Handled;
 }
 
@@ -2031,7 +2075,7 @@ void BuildBuyMenu(int client, int iCategory = -1)
 	}
 
 	Handle hMenu = CreateMenu(BuyMenu_Handler);
-	SetMenuTitle(hMenu, "Your Points: %i", GetClientPoints(client));
+	SetMenuTitle(hMenu, "Your Points: %i\nUse sm_ps for help about Point System", GetClientPoints(client));
 
 	if (iCategory != -1)
 		SetMenuExitBackButton(hMenu, true);
