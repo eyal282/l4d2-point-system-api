@@ -79,7 +79,7 @@ public void CreateProducts()
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "ex exp exammo expammo", "upgrade_add 1", 0.0, 0.0,
 	                    BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);
 
-	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "fire incammo inammo fireammo", "upgrade_add 0", 0.0, 0.0,
+	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvIncendiaryAmmoCost), "Incendiary Ammo", "Bullets set Infected on fire", "incammo inammo fireammo", "upgrade_add 0", 0.0, 0.0,
 	                    BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_BOTTEAM);
 
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvLaserPointerCost), "Laser Sight", "Makes your weapon more accurate", "laser", "upgrade_add 2", 0.0, 0.0,
