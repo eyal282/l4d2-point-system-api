@@ -266,14 +266,34 @@ public void L4D_OnServerHibernationUpdate(bool hibernating)
 	if (!hibernating)
 		RegPluginLibrary("PointSystemAPI");
 }
-// Global Forward
-public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName, bool bBird)
+
+/**
+ * Description
+ * 
+ * @param victim             Muse that was honored to model a karma event
+ * @param attacker           Artist that crafted the karma event
+ * @param KarmaName          Name of karma: "Charge", "Impact", "Jockey", "Slap", "Punch", "Smoke"
+ * @param bBird              true if a bird charge event occured, false if a karma kill was detected or performed.
+ * @param bKillConfirmed     Whether or not this indicates the complete death of the player. This is NOT just !IsPlayerAlive(victim)
+ * @noreturn 
+ * @note					This can be called more than once. One for the announcement, one for the kill confirmed.
+							If you want to reward both killconfirmed and killunconfirmed you should reward when killconfirmed is false.
+							If you want to reward if killconfirmed you should reward when killconfirmed is true.
+
+ * @note					If the plugin makes a kill confirmed without a previous announcement without kill confirmed,
+							it compensates by sending two consecutive events, one without kill confirmed, one with kill confirmed.
+
+ */
+public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName, bool bBird, bool bKillConfirmed)
 {
-	int Points = GetConVarInt(IKarma);
+	if(!bKillConfirmed)
+	{
+		int Points = GetConVarInt(IKarma);
 
-	g_fPoints[attacker] += float(Points);
+		g_fPoints[attacker] += float(Points);
 
-	PrintToChat(attacker, "\x04[PS]\x01 %s %s'd!!! + \x05%d\x03 points (Σ: \x05%d\x03)", bBird ? "Bird" : "Karma", KarmaName, Points, GetClientPoints(attacker));
+		PrintToChat(attacker, "\x04[PS]\x01 %s %s'd!!! + \x05%d\x03 points (Σ: \x05%d\x03)", bBird ? "Bird" : "Karma", KarmaName, Points, GetClientPoints(attacker));
+	}
 }
 
 public Action CheckMultipleDamage(Handle hTimer, any number)
