@@ -200,7 +200,7 @@ public void OnLibraryAdded(const char[] name)
 	}
 }
 
-public Action L4D2_CGasCan_ShouldStartAction(int client, int gascan)
+public Action L4D2_CGasCan_ShouldStartAction(int client, int nozzle, int gascan)
 {
 	char sTargetname[64];
 	GetEntPropString(gascan, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
