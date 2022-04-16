@@ -36,16 +36,16 @@ enum struct enProduct
 	float fCooldown; // Cooldown between purchases.
 	
 	float fNextBuyProduct[MAXPLAYERS + 1]; // Next time each player can buy this product.
-
-	int buyer;
 }
+
 
 enum struct enDelayedProduct
 {
-	Timer timer;
+	Handle timer;
+	float fCost;
 	int buyerUserId; // Buyer's user ID.
 	int targetUserId; // victim of purchase, but his user ID.
-	char sAliases[256]; // Aliases, seperated by spaces, to buy directly with !buy <alias>
+	char sAlias[32]; // Alias of product
 	char sInfo[256]; // Info that only devs can see.
 }
 
@@ -122,6 +122,7 @@ native int PSAPI_CreateCategory(int iCategory, char[] sID, char[] sName, int iBu
 // The first alias is documented in the buy menu.
 // fCost is rounded to an integer.
 // Each alias is maxed at 32 characters.
+// Each product is maxed at 8 aliases.
 // bNoHooks determines if PSAPI_OnProductCreated should be called. Careful with infinite loops
 native bool PSAPI_CreateProduct(int iCategory, float fCost, char[] sName, char[] sDescription, char[] sAliases, char[] sInfo, float fDelay, float fCooldown, int iBuyFlags, bool bNoHooks = false);
 
@@ -133,6 +134,10 @@ native bool PSAPI_FindCategoryByIdentifier(const char[] sID, any[] aCat);
 
 // Given an alias, triggers every condition and every global forward except OnShouldGiveProduct to determine if the product is possible to buy.
 native bool PSAPI_CanProductBeBought(const char[] sAlias, int buyer, int target);
+
+// Feed a list of aliases seperated by spaces to refund every delayed instance of them for the buyer target duo:
+native void PSAPI_RefundProducts(const char[] sAliases, int buyer, int target);
+
 // Finds a product by one of their aliases.
 // To invoke:
 // enProduct product;
