@@ -200,7 +200,7 @@ public void OnLibraryAdded(const char[] name)
 	}
 }
 
-public Action L4D2_CGasCan_ShouldStartAction(int client, int gascan)
+public Action L4D2_CGasCan_ShouldStartAction(int client, int gascan, int nozzle)
 {
 	char sTargetname[64];
 	GetEntPropString(gascan, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
@@ -211,11 +211,36 @@ public Action L4D2_CGasCan_ShouldStartAction(int client, int gascan)
 	return Plugin_Handled;
 }
 
+public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
+{
+	if (StrEqual(sInfo, "freehanukahescape") || StrEqual(sInfo, "goodguynick"))
+	{
+		if (PSAPI_GetTeamHumansCount(L4DTeam_Survivor, false) > 1)
+		{
+			PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Error:\x05 Achievement can only be earned if you're the only survivor in the game.");
+			return Plugin_Handled;
+		}
+	}
+
+	return Plugin_Continue;
+}
+
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
-	if (strncmp(sInfo, "give ", 5) == 0)
+	if (StrEqual(sInfo, "freehanukahescape"))
+	{
+		KeyValues kv = new KeyValues("FreeChristmasUserEscaped");
+		FakeClientCommandKeyValues(target, kv);
+	}
+	else if (StrEqual(sInfo, "goodguynick"))
+	{
+		KeyValues kv = new KeyValues("FreeWeekendUserEscaped");
+
+		FakeClientCommandKeyValues(target, kv);
+	}
+	else if (strncmp(sInfo, "give ", 5) == 0)
 	{
 		char sClassname[64];
 		strcopy(sClassname, sizeof(sClassname), sInfo);
@@ -337,6 +362,12 @@ public void CreateSurvivorProducts()
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsOxy), "Oxygen Tank", NO_DESCRIPTION, "oxy oxygen", "give oxygentank", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsFireWorks), "Fireworks", NO_DESCRIPTION, "fworks fwork fireworks firework", "give fireworkcrate", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(PointsGnome), "Gnome", NO_DESCRIPTION, "gnome", "give gnome", 0.0, 0.0, BUYFLAG_ALIVE | BUYFLAG_SURVIVOR | BUYFLAG_PINNED_NO_SMOKER | BUYFLAG_INCAP);
+
+	PSAPI_CreateProduct(iCategory, 0.0, "Free Hanukah Escape", "Achievement earned", "freehanukahescape", "freehanukahescape", 0.0, 86400.0,
+	                    BUYFLAG_ALL_TEAMS | BUYFLAG_ALL_LIFESTATES | BUYFLAG_INCAP | BUYFLAG_PINNED);
+
+	PSAPI_CreateProduct(iCategory, 0.0, "Good Guy Nick", "Achievement earned", "goodguynick", "goodguynick", 0.0, 86400.0,
+	                    BUYFLAG_SURVIVOR | BUYFLAG_ALL_LIFESTATES | BUYFLAG_INCAP | BUYFLAG_PINNED);
 }
 
 // -1 for do nothing, 0 for active search

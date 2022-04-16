@@ -14,19 +14,22 @@ ConVar g_hCommonLimit;
 int    ucommonleft;
 int    witchesinqueue;
 
-Handle PointsSuicide        = INVALID_HANDLE;
-Handle PointsHunter         = INVALID_HANDLE;
-Handle PointsJockey         = INVALID_HANDLE;
-Handle PointsSmoker         = INVALID_HANDLE;
-Handle PointsCharger        = INVALID_HANDLE;
-Handle PointsBoomer         = INVALID_HANDLE;
-Handle PointsSpitter        = INVALID_HANDLE;
-Handle PointsWitch          = INVALID_HANDLE;
-Handle PointsTank           = INVALID_HANDLE;
-Handle PointsHorde          = INVALID_HANDLE;
-Handle PointsUmob           = INVALID_HANDLE;
-Handle PointsTerrorPerWitch = INVALID_HANDLE;
-Handle WitchLimit           = INVALID_HANDLE;
+Handle PointsSuicide           = INVALID_HANDLE;
+Handle PointsExtinguish        = INVALID_HANDLE;
+Handle PointsExtinguishTank    = INVALID_HANDLE;
+Handle PointsMinInstantRespawn = INVALID_HANDLE;
+Handle PointsHunter            = INVALID_HANDLE;
+Handle PointsJockey            = INVALID_HANDLE;
+Handle PointsSmoker            = INVALID_HANDLE;
+Handle PointsCharger           = INVALID_HANDLE;
+Handle PointsBoomer            = INVALID_HANDLE;
+Handle PointsSpitter           = INVALID_HANDLE;
+Handle PointsWitch             = INVALID_HANDLE;
+Handle PointsTank              = INVALID_HANDLE;
+Handle PointsHorde             = INVALID_HANDLE;
+Handle PointsUmob              = INVALID_HANDLE;
+Handle PointsTerrorPerWitch    = INVALID_HANDLE;
+Handle WitchLimit              = INVALID_HANDLE;
 
 char g_sUncommonModels[][] = {
 	"models/infected/common_male_riot.mdl",
@@ -52,19 +55,22 @@ public void OnPluginStart()
 
 	g_hCommonLimit = FindConVar("z_common_limit");
 
-	PointsSuicide        = AutoExecConfig_CreateConVar("l4d2_points_suicide", "4", "How many points does suicide cost");
-	PointsHunter         = AutoExecConfig_CreateConVar("l4d2_points_hunter", "4", "How many points does a hunter cost");
-	PointsJockey         = AutoExecConfig_CreateConVar("l4d2_points_jockey", "6", "How many points does a jockey cost");
-	PointsSmoker         = AutoExecConfig_CreateConVar("l4d2_points_smoker", "4", "How many points does a smoker cost");
-	PointsCharger        = AutoExecConfig_CreateConVar("l4d2_points_charger", "6", "How many points does a charger cost");
-	PointsBoomer         = AutoExecConfig_CreateConVar("l4d2_points_boomer", "5", "How many points does a boomer cost");
-	PointsSpitter        = AutoExecConfig_CreateConVar("l4d2_points_spitter", "6", "How many points does a spitter cost");
-	PointsWitch          = AutoExecConfig_CreateConVar("l4d2_points_witch", "20", "How many points does a witch cost");
-	PointsTank           = AutoExecConfig_CreateConVar("l4d2_points_tank", "30", "How many points does a tank cost");
-	PointsHorde          = AutoExecConfig_CreateConVar("l4d2_points_horde", "15", "How many points does a horde cost");
-	PointsUmob           = AutoExecConfig_CreateConVar("l4d2_points_umob", "12", "How many points does an uncommon mob cost");
-	PointsTerrorPerWitch = AutoExecConfig_CreateConVar("l4d2_points_terror_per_witch", "10", "How many points does a terror cost per witch");
-	WitchLimit           = AutoExecConfig_CreateConVar("l4d2_points_witch_limiter", "10", "Maximum amount of witches");
+	PointsSuicide           = AutoExecConfig_CreateConVar("l4d2_points_suicide", "4", "How many points does suicide cost");
+	PointsExtinguish        = AutoExecConfig_CreateConVar("l4d2_points_extinguish", "-1", "How many points does extinguish cost");
+	PointsExtinguishTank    = AutoExecConfig_CreateConVar("l4d2_points_extinguish_tank", "-1", "How many points does tank extinguish cost? Or -1 to disable");
+	PointsMinInstantRespawn = AutoExecConfig_CreateConVar("l4d2_points_min_players_instant_respawn", "4", "If there are x or less human infected players, you instantly respawn by buying.", _, true, 0.0, true, float(MAXPLAYERS));
+	PointsHunter            = AutoExecConfig_CreateConVar("l4d2_points_hunter", "4", "How many points does a hunter cost");
+	PointsJockey            = AutoExecConfig_CreateConVar("l4d2_points_jockey", "6", "How many points does a jockey cost");
+	PointsSmoker            = AutoExecConfig_CreateConVar("l4d2_points_smoker", "4", "How many points does a smoker cost");
+	PointsCharger           = AutoExecConfig_CreateConVar("l4d2_points_charger", "6", "How many points does a charger cost");
+	PointsBoomer            = AutoExecConfig_CreateConVar("l4d2_points_boomer", "5", "How many points does a boomer cost");
+	PointsSpitter           = AutoExecConfig_CreateConVar("l4d2_points_spitter", "6", "How many points does a spitter cost");
+	PointsWitch             = AutoExecConfig_CreateConVar("l4d2_points_witch", "20", "How many points does a witch cost");
+	PointsTank              = AutoExecConfig_CreateConVar("l4d2_points_tank", "30", "How many points does a tank cost");
+	PointsHorde             = AutoExecConfig_CreateConVar("l4d2_points_horde", "15", "How many points does a horde cost");
+	PointsUmob              = AutoExecConfig_CreateConVar("l4d2_points_umob", "12", "How many points does an uncommon mob cost");
+	PointsTerrorPerWitch    = AutoExecConfig_CreateConVar("l4d2_points_terror_per_witch", "10", "How many points does a terror cost per witch");
+	WitchLimit              = AutoExecConfig_CreateConVar("l4d2_points_witch_limiter", "10", "Maximum amount of witches");
 
 	HookEvent("round_start", Event_RoundStart, EventHookMode_Post);
 
@@ -153,9 +159,94 @@ public Action Event_RoundStart(Handle hEvent, const char[] Name, bool dontBroadc
 
 public Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float& fCost, float& fDelay, float& fCooldown)
 {
-	if (StrEqual(sInfo, "Terror All Witches Attack"))
+	if (StrEqual(sInfo, "Infected Extinguish"))
+	{
+		float tankCost = GetConVarFloat(PointsExtinguishTank);
+
+		if (GetConVarFloat(PointsExtinguish) == tankCost)
+			FormatEx(sDescription, sizeof(enProduct::sDescription), "Extinguishes your fire.");
+
+		else if (tankCost == -1.0)
+		{
+			FormatEx(sDescription, sizeof(enProduct::sDescription), "Extinguishes your fire. Doesn't work for tanks.");
+		}
+		else
+		{
+			FormatEx(sDescription, sizeof(enProduct::sDescription), "Extinguishes your fire. Costs %i points for tanks.", RoundToFloor(GetConVarFloat(PointsExtinguishTank)));
+		}
+
+		if (L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank)
+			fCost = tankCost;
+	}
+	else if (StrEqual(sInfo, "Terror All Witches Attack"))
 	{
 		fCost = GetConVarFloat(PointsTerrorPerWitch) * L4D2_GetWitchCount();
+	}
+	else if (StrEqual(sInfo, "Special Infected Ghost Spawn", false))
+	{
+		int infectedCount = PSAPI_GetTeamHumansCount(L4DTeam_Infected, false);
+
+		int minCountForRespawn = GetConVarInt(PointsMinInstantRespawn);
+
+		if (infectedCount <= minCountForRespawn)
+		{
+			fDelay = 0.0;
+		}
+
+		if (minCountForRespawn >= MAXPLAYERS)
+		{
+			FormatEx(sDescription, sizeof(enProduct::sDescription), "Identical to other infected respawn products.\nEnables zombie class selector.\nCosts the same as the highest priced SI respawn.");
+		}
+		else
+		{
+			FormatEx(sDescription, sizeof(enProduct::sDescription), "Identical to other infected respawn products.\nEnables zombie class selector.\nCosts the same as the highest priced SI respawn.\nInstant spawn if infected count is <= %i", minCountForRespawn);
+		}
+	}
+	else if (strncmp(sInfo, "Special Infected Spawn - ", 25) == 0)
+	{
+		int infectedCount = PSAPI_GetTeamHumansCount(L4DTeam_Infected, false);
+
+		int minCountForRespawn = GetConVarInt(PointsMinInstantRespawn);
+
+		if (infectedCount <= minCountForRespawn)
+		{
+			fDelay = 0.0;
+		}
+
+		char sClassname[64];
+		strcopy(sClassname, sizeof(sClassname), sInfo);
+
+		// 1 = noPick, 0 = canPick
+
+		bool bNoPick = true;
+		if (strncmp(sInfo, "Special Infected Spawn - 0", 26) == 0)
+			bNoPick = false;
+
+		if (ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 1", "") == -1)
+			ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 0", "");
+
+		if (bNoPick)
+		{
+			if (minCountForRespawn >= MAXPLAYERS)
+			{
+				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nDisables zombie class selector.", sClassname);
+			}
+			else
+			{
+				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nDisables zombie class selector.\nInstant spawn if infected count is <= %i", sClassname, minCountForRespawn);
+			}
+		}
+		else
+		{
+			if (minCountForRespawn >= MAXPLAYERS)
+			{
+				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nEnables zombie class selector by identical cost to !buy ghost.", sClassname);
+			}
+			else
+			{
+				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nEnables zombie class selector by identical cost to !buy ghost.\nInstant spawn if infected count is <= %i", sClassname, minCountForRespawn);
+			}
+		}
 	}
 
 	return Plugin_Continue;
@@ -164,9 +255,17 @@ public Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAli
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 // You should print an error because blocking purchase prints nothing
 // Return Plugin_Handled to block purchase
-public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown, char[] sError, int iErrorLen)
+public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
-	if (StrEqual(sInfo, "Infected Suicide", false))
+	if (StrEqual(sInfo, "Infected Extinguish"))
+	{
+		if (!(GetEntityFlags(target) & FL_ONFIRE))
+		{
+			PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Error:\x05 You are not on fire!");
+			return Plugin_Handled;
+		}
+	}
+	else if (StrEqual(sInfo, "Infected Suicide", false))
 	{
 		if (L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Charger)
 		{
@@ -177,7 +276,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 			{
 				if ((!(GetEntityFlags(target) & FL_ONGROUND)))
 				{
-					FormatEx(sError, iErrorLen, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself until you reach the ground as a Charger.");
+					PSAPI_SetErrorByPriority(50, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself until you reach the ground as a Charger.");
 					return Plugin_Handled;
 				}
 			}
@@ -191,13 +290,17 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 			{
 				if (IsDoubleCharged(iAnyVictim))
 				{
-					FormatEx(sError, iErrorLen, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself when pinning a double-charged survivor.");
+					PSAPI_SetErrorByPriority(50, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself when pinning a double-charged survivor.");
 					return Plugin_Handled;
 				}
 			}
 		}
 	}
 
+	if (strncmp(sInfo, "Special Infected Spawn - ", 25) == 0 || StrEqual(sInfo, "Special Infected Ghost Spawn", false))
+	{
+		PSAPI_RefundProducts("boomer spitter smoker hunter charger jockey ghost", buyer, target);
+	}
 	return Plugin_Continue;
 }
 
@@ -292,6 +395,10 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		else
 			ForcePlayerSuicide(target);
 	}
+	else if (StrEqual(sInfo, "Infected Extinguish"))
+	{
+		ExtinguishEntity(target);
+	}
 
 	return Plugin_Continue;
 }
@@ -301,24 +408,25 @@ public void CreateInfectedProducts()
 	char sInfo[256];
 
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %iboomer", GetConVarInt(PointsBoomer) == CalculateGhostPrice() ? 0 : 1);
-	PSAPI_CreateProduct(-1, GetConVarFloat(PointsBoomer), "Boomer", "Ghost Spawn of a Boomer", "boomer", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
+
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsBoomer), "Boomer", NO_DESCRIPTION, "boomer", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
 
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ispitter", GetConVarFloat(PointsSpitter) == CalculateGhostPrice() ? 0 : 1);
-	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSpitter), "Spitter", "Ghost Spawn of a Spitter", "spitter", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSpitter), "Spitter", NO_DESCRIPTION, "spitter", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
 
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ismoker", GetConVarFloat(PointsSmoker) == CalculateGhostPrice() ? 0 : 1);
-	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSmoker), "Smoker", "Ghost Spawn of a Smoker", "smoker", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSmoker), "Smoker", NO_DESCRIPTION, "smoker", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
 
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ihunter", GetConVarFloat(PointsHunter) == CalculateGhostPrice() ? 0 : 1);
-	PSAPI_CreateProduct(-1, GetConVarFloat(PointsHunter), "Hunter", "Ghost Spawn of a Hunter", "hunter", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsHunter), "Hunter", NO_DESCRIPTION, "hunter", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
 
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %icharger", GetConVarFloat(PointsCharger) == CalculateGhostPrice() ? 0 : 1);
-	PSAPI_CreateProduct(-1, GetConVarFloat(PointsCharger), "Charger", "Ghost Spawn of a Charger", "charger", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsCharger), "Charger", NO_DESCRIPTION, "charger", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
 
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %ijockey", GetConVarFloat(PointsJockey) == CalculateGhostPrice() ? 0 : 1);
-	PSAPI_CreateProduct(-1, GetConVarFloat(PointsJockey), "Jockey", "Ghost Spawn of a Jockey", "jockey", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsJockey), "Jockey", NO_DESCRIPTION, "jockey", sInfo, 3.0, 0.0, BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
 
-	PSAPI_CreateProduct(-1, CalculateGhostPrice(), "Ghost", "Instantly revives you to pick any Special Infected", "ghost", "Special Infected Ghost Spawn", 3.0, 0.0,
+	PSAPI_CreateProduct(-1, CalculateGhostPrice(), "Ghost", NO_DESCRIPTION, "ghost", "Special Infected Ghost Spawn", 3.0, 0.0,
 	                    BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS | BUYFLAG_HUMANTEAM);
 
 	PSAPI_CreateProduct(-1, GetConVarFloat(PointsTank), "Tank", "Ghost spawn of a Tank", "tank", "Special Infected Spawn - 1tank", 0.0, 0.0,
@@ -342,6 +450,9 @@ public void CreateInfectedProducts()
 
 	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSuicide), "Suicide", "Instantly kills you", "kill suicide die death", "Infected Suicide", 0.0, 0.0,
 	                    BUYFLAG_INFECTED | BUYFLAG_ALIVE | BUYFLAG_GHOST);
+
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsExtinguish), "Extinguish", NO_DESCRIPTION, "ext extinguish", "Infected Extinguish", 0.0, 0.0,
+	                    BUYFLAG_INFECTED | BUYFLAG_ALIVE);
 }
 
 stock void SetPlayerAlive(int client, bool alive)

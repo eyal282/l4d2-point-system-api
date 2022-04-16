@@ -19,6 +19,7 @@ public Plugin myinfo =
 	url         = ""
 };
 
+ConVar g_cvExplosiveAmmoStagger;
 ConVar g_cvExplosiveAmmoCost;
 ConVar g_cvIncendiaryAmmoCost;
 ConVar g_cvLaserPointerCost;
@@ -27,9 +28,10 @@ public void OnPluginStart()
 {
 	AutoExecConfig_SetFile("PointSystemAPI_WeaponUpgrades");
 
-	g_cvExplosiveAmmoCost  = AutoExecConfig_CreateConVar("l4d2_points_exammo_cost", "8");
-	g_cvIncendiaryAmmoCost = AutoExecConfig_CreateConVar("l4d2_points_incammo_cost", "5");
-	g_cvLaserPointerCost   = AutoExecConfig_CreateConVar("l4d2_points_laser_pointer_cost", "0");
+	g_cvExplosiveAmmoStagger = AutoExecConfig_CreateConVar("l4d2_points_exammo_friendly_stagger", "0", "Should explosive ammo stagger teammates?");
+	g_cvExplosiveAmmoCost    = AutoExecConfig_CreateConVar("l4d2_points_exammo_cost", "8");
+	g_cvIncendiaryAmmoCost   = AutoExecConfig_CreateConVar("l4d2_points_incammo_cost", "5");
+	g_cvLaserPointerCost     = AutoExecConfig_CreateConVar("l4d2_points_laser_pointer_cost", "0");
 
 	CreateProducts();
 
@@ -38,6 +40,37 @@ public void OnPluginStart()
 
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i))
+			continue;
+
+		Func_OnClientPutInServer(i);
+	}
+}
+
+public void OnClientPutInServer(int client)
+{
+	Func_OnClientPutInServer(client);
+}
+
+public void Func_OnClientPutInServer(int client)
+{
+	SDKHook(client, SDKHook_OnTakeDamage, SDKEvent_OnTakeDamage);
+}
+
+public Action SDKEvent_OnTakeDamage(int victim, int& attacker, int& inflictor, float& damage, int& damagetype)
+{
+	if (PSAPI_IsEntityPlayer(attacker) && L4D_GetClientTeam(attacker) == L4DTeam_Survivor && L4D_GetClientTeam(victim) == L4DTeam_Survivor)
+	{
+		if (!g_cvExplosiveAmmoStagger.BoolValue && damagetype & DMG_BLAST)
+			damagetype = DMG_BULLET;
+
+		return Plugin_Changed;
+	}
+
+	return Plugin_Continue;
 }
 
 public void OnConfigsExecuted()

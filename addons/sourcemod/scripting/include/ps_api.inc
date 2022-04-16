@@ -36,6 +36,17 @@ enum struct enProduct
 	float fCooldown; // Cooldown between purchases.
 	
 	float fNextBuyProduct[MAXPLAYERS + 1]; // Next time each player can buy this product.
+
+	int buyer;
+}
+
+enum struct enDelayedProduct
+{
+	Timer timer;
+	int buyerUserId; // Buyer's user ID.
+	int targetUserId; // victim of purchase, but his user ID.
+	char sAliases[256]; // Aliases, seperated by spaces, to buy directly with !buy <alias>
+	char sInfo[256]; // Info that only devs can see.
 }
 
 
@@ -96,6 +107,11 @@ you can basically help your bots, buying them products without disturbing any pl
 */
 
 // Natives
+
+// Sets global error for the forward you're inside. Highest priority number wins. Refunds and death buys have a priority of 50.
+// Returns Plugin_Handled always. This means you can return PSAPI_SetErrorByPriority as an easy method.
+// Using a negative priority will not set the error, so cvars that deal with priority have an easy way to delete the error.
+native Action PSAPI_SetErrorByPriority(int priority, char[] error, any ...);
 
 // Creates or edits a category.
 // Not all buy flags work with categories, check BUYFLAG_* for more info.
@@ -167,9 +183,8 @@ native void PSAPI_AddTankHealCount(int client, int amount);
 // Does not fire if a product is created with bNoHooks = true
 forward Action PointSystemAPI_OnProductCreated(enProduct product);
 
-// return Plugin_Handled or higher to prevent the user from buying anything. Biggest return determines the error message.
-// Buying as a dead player returns 50.
-forward Action PointSystemAPI_OnCanBuyProducts(int buyer, int target, char[] sError, int iErrorLen);
+// return Plugin_Handled to prevent the user from buying anything. Supports PSAPI_SetErrorByPriority
+forward Action PointSystemAPI_OnCanBuyProducts(int buyer, int target);
 
 // return Plugin_Handled to hide the category, must have BUYFLAGS_CUSTOMNAME to fire this.
 forward Action PointSystemAPI_OnGetParametersCategory(int buyer, const char[] sID, char[] sName);
@@ -182,15 +197,15 @@ forward Action PointSystemAPI_OnGetParametersCategory(int buyer, const char[] sI
 forward Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float &fCost, float &fDelay, float &fCooldown);
 
 // sAliases contain the original alias list, to compare your own alias as an identifier.
-// This forward is triggered by PSAPI_CanProductBeBought so never to throw an error just format sError.
+// This forward is triggered by PSAPI_CanProductBeBought so always use PSAPI_SetErrorByPriority
 // Return Plugin_Handled to block purchase
-forward Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown, char[] sError, int iErrorLen);
+forward Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown);
 
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 // Called every 0.1 seconds during the delay of arrival.
 // Product must have BUYFLAG_REALTIME_REFUNDS.
 // fTimeleft can be 0.0, and in this case, in the same frame PointSystemAPI_OnBuyProductPost will be called, so you don't need PointSystemAPI_OnBuyProductPost if you have this.
-// This forward is triggered by PSAPI_CanProductBeBought so never print errors.
+// This forward is triggered by PSAPI_CanProductBeBought so always use PSAPI_SetErrorByPriority
 // Return Plugin_Handled to refund purchase
 forward Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fTimeleft)
 	
@@ -198,14 +213,13 @@ forward Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sI
 // If a delay exists, called several seconds after PointSystemAPI_OnTryBuyProduct. Otherwise this is called instantly. 
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 
-// This forward is triggered by PSAPI_CanProductBeBought so never print errors.
+// This forward is triggered by PSAPI_CanProductBeBought so always use PSAPI_SetErrorByPriority.
 // Return Plugin_Handled to refund.
 forward Action PointSystemAPI_OnBuyProductPost(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown);
 	
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 
-// You should reconsider printing an error because blocking purchase prints a refund point gain.
 // Return Plugin_Handled to refund if you cannot give the product, which should be rare and may interfere with PSAPI_CanProductBeBought which won't trigger this forward.
 forward Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] info, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown);
 

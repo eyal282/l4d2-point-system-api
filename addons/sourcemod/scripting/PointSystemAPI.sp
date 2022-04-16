@@ -8,7 +8,11 @@
 #define PLUGIN_TITLE "Point System API"
 float version = 1.0;
 
-ArrayList g_aCategories, g_aProducts;
+// Primitive constant. Feel free to make a better method. Derived from the fact acid stays for 5 seconds and deals 28/29 ticks of damage, so 28 / 5 = 5.6, therefore  1 / 5.6 = delay.
+// But due to inaccuracies, I decrement slightly.
+float SPIT_DELAY = 0.17;
+
+ArrayList g_aCategories, g_aProducts, g_aDelayedProducts;
 
 GlobalForward g_fwOnProductCreated;
 GlobalForward g_fwOnCanBuyProducts;
@@ -19,11 +23,18 @@ GlobalForward g_fwOnRealTimeRefundProduct;
 GlobalForward g_fwOnBuyProductPost;
 GlobalForward g_fwOnShouldGiveProduct;    // We should now give the product to the user, because the delay has passed and not refunded.
 
+char  g_error[256];
+int   g_errorPriority;
 float g_fPoints[MAXPLAYERS + 1] = { 0.0, ... };
 float g_fSavedSurvivorPoints[MAXPLAYERS + 1], g_fSavedInfectedPoints[MAXPLAYERS + 1] = { 0.0, ... };
 
+// MultipleDamageStack is not attack count, it's point count accumulated.
 int   MultipleDamageStack[MAXPLAYERS + 1];
 float NextMultipleDamage[MAXPLAYERS + 1];
+
+// SpitterDamageStack is seconds of damage.
+float SpitterDamageStack[MAXPLAYERS + 1];
+float NextSpitterDamage[MAXPLAYERS + 1];
 
 char g_sLastBoughtAlias[MAXPLAYERS + 1][32];
 char g_sLastBoughtTargetArg[MAXPLAYERS + 1][64];
@@ -80,14 +91,13 @@ Handle IRide              = INVALID_HANDLE;
 Handle ITag               = INVALID_HANDLE;
 Handle IIncap             = INVALID_HANDLE;
 Handle IHurt              = INVALID_HANDLE;
+Handle ISpit              = INVALID_HANDLE;
 Handle IKill              = INVALID_HANDLE;
 Handle IKarma             = INVALID_HANDLE;
 
 Handle ResetPoints = INVALID_HANDLE;
 Handle StartPoints = INVALID_HANDLE;
 Handle DeadBuy     = INVALID_HANDLE;
-
-bool g_bIsAreaStart = false;
 
 public Plugin myinfo =
 {
@@ -106,10 +116,22 @@ public void OnAllPluginsLoaded()
 		RegConsoleCmd("sm_b", BuyMenu);
 }
 
+public void OnPluginEnd()
+{
+	RemoveServerTag2("buy");
+	RemoveServerTag2("psapi");
+	RemoveServerTag2("!buy");
+}
+
 public void OnPluginStart()
 {
-	g_aCategories = new ArrayList(sizeof(enCategory));
-	g_aProducts   = new ArrayList(sizeof(enProduct));
+	AddServerTag2("buy");
+	AddServerTag2("psapi");
+	AddServerTag2("!buy");
+
+	g_aCategories      = new ArrayList(sizeof(enCategory));
+	g_aProducts        = new ArrayList(sizeof(enProduct));
+	g_aDelayedProducts = new ArrayList(sizeof(enDelayedProduct));
 
 	g_fwOnProductCreated = CreateGlobalForward("PointSystemAPI_OnProductCreated", ET_Event, Param_Array);
 
@@ -169,6 +191,7 @@ public void OnPluginStart()
 	ITag               = AutoExecConfig_CreateConVar("l4d2_points_boom", "1", "How many points does booming a survivor earn");
 	IIncap             = AutoExecConfig_CreateConVar("l4d2_points_incap", "3", "How many points does incapping a survivor earn");
 	IHurt              = AutoExecConfig_CreateConVar("l4d2_points_damage", "2", "How many points does doing damage earn");
+	ISpit              = AutoExecConfig_CreateConVar("l4d2_points_spit", "1.0", "Points gained per second of standing on spit. If set to 0, spitter uses multiple damage.");
 	IKill              = AutoExecConfig_CreateConVar("l4d2_points_kill", "5", "How many points does killing a survivor earn");
 	IKarma             = AutoExecConfig_CreateConVar("l4d2_points_karma", "5", "How many points does registering a karma event earn");
 
@@ -224,11 +247,10 @@ public void OnPluginStart()
 	HookEvent("round_start", Event_RStart);
 	HookEvent("finale_win", Event_Finale);
 	HookEvent("player_team", Event_ChangeTeam, EventHookMode_Pre);
-	HookEvent("player_left_start_area", Event_PlayerLeftStartArea, EventHookMode_Post);
 }
 
-// return Plugin_Handled to prevent the user from buying anything.
-public Action PointSystemAPI_OnCanBuyProducts(int buyer, int target, char[] sError, int iErrorLen)
+// return Plugin_Handled or above to prevent the user from buying anything.
+public Action PointSystemAPI_OnCanBuyProducts(int buyer, int target)
 {
 	if (GetClientTeam(buyer) != view_as<int>(L4DTeam_Survivor))
 		return Plugin_Continue;
@@ -241,15 +263,13 @@ public Action PointSystemAPI_OnCanBuyProducts(int buyer, int target, char[] sErr
 		// Cannot buy as dead survivor
 		case 0:
 		{
-			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error: Buy menu cannot be accessed when you're dead!");
-			return view_as<Action>(50);
+			return PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Error: Buy menu cannot be accessed when you're dead!");
 		}
 		case 1:
 		{
 			if (buyer != target)
 			{
-				FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error: You can only buy products for yourself when dead!");
-				return view_as<Action>(50);
+				return PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Error: You can only buy products for yourself when dead!");
 			}
 
 			return Plugin_Continue;
@@ -269,24 +289,26 @@ public void L4D_OnServerHibernationUpdate(bool hibernating)
 
 /**
  * Description
- * 
+ *
  * @param victim             Muse that was honored to model a karma event
  * @param attacker           Artist that crafted the karma event
  * @param KarmaName          Name of karma: "Charge", "Impact", "Jockey", "Slap", "Punch", "Smoke"
  * @param bBird              true if a bird charge event occured, false if a karma kill was detected or performed.
  * @param bKillConfirmed     Whether or not this indicates the complete death of the player. This is NOT just !IsPlayerAlive(victim)
- * @noreturn 
+ * @param bOnlyConfirmed     Whether or not only kill confirmed are allowed.
+
+ * @noreturn
  * @note					This can be called more than once. One for the announcement, one for the kill confirmed.
-							If you want to reward both killconfirmed and killunconfirmed you should reward when killconfirmed is false.
-							If you want to reward if killconfirmed you should reward when killconfirmed is true.
+                            If you want to reward both killconfirmed and killunconfirmed you should reward when killconfirmed is false.
+                            If you want to reward if killconfirmed you should reward when killconfirmed is true.
 
  * @note					If the plugin makes a kill confirmed without a previous announcement without kill confirmed,
-							it compensates by sending two consecutive events, one without kill confirmed, one with kill confirmed.
+                            it compensates by sending two consecutive events, one without kill confirmed, one with kill confirmed.
 
  */
-public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName, bool bBird, bool bKillConfirmed)
+public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName, bool bBird, bool bKillConfirmed, bool bOnlyConfirmed)
 {
-	if(!bKillConfirmed)
+	if ((bOnlyConfirmed && bKillConfirmed) || (!bOnlyConfirmed && !bKillConfirmed))
 	{
 		int Points = GetConVarInt(IKarma);
 
@@ -298,7 +320,7 @@ public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const cha
 
 public Action CheckMultipleDamage(Handle hTimer, any number)
 {
-	if (!g_bIsAreaStart)
+	if (!L4D_HasAnySurvivorLeftSafeAreaStock())
 		return Plugin_Stop;
 
 	for (int i = 1; i <= MaxClients; i++)
@@ -315,6 +337,13 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 			PrintToChat(i, "\x04[PS]\x03 Multiple Damage + \x05%d\x03 points *\x05 %dx\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", GetConVarInt(IHurt), MultipleDamageStack[i] / GetConVarInt(IHurt), MultipleDamageStack[i], GetClientPoints(i));
 			MultipleDamageStack[i] = 0;
 		}
+
+		if (GetConVarBool(Notifications) && NextSpitterDamage[i] <= GetEngineTime() && SpitterDamageStack[i] >= 1.0 && RoundToFloor(GetConVarFloat(ISpit) * SpitterDamageStack[i]) > 0)
+		{
+			NextSpitterDamage[i] = GetEngineTime() + 10.0;
+			PrintToChat(i, "\x04[PS]\x03 Acid Damage + \x05%d\x03 points *\x05 %.1fsec\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", GetConVarInt(ISpit), SpitterDamageStack[i], RoundToFloor(GetConVarFloat(ISpit) * SpitterDamageStack[i]), GetClientPoints(i));
+			SpitterDamageStack[i] = 0.0;
+		}
 	}
 
 	return Plugin_Continue;
@@ -322,10 +351,10 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 
 public void OnMapStart()
 {
+	CreateTimer(0.1, CheckMultipleDamage, 0, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 	CreateTimer(1.0, Timer_Cleanup, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 
 	GetCurrentMap(MapName, sizeof(MapName));
-	g_bIsAreaStart = false;
 }
 
 public Action Timer_Cleanup(Handle hTimer)
@@ -383,10 +412,12 @@ void WipeAllInfected()
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
+	CreateNative("PSAPI_SetErrorByPriority", Native_SetErrorByPriority);
 	CreateNative("PSAPI_CreateCategory", Native_CreateCategory);
 	CreateNative("PSAPI_CreateProduct", Native_CreateProduct);
 	CreateNative("PSAPI_FindCategoryByIdentifier", Native_FindCategory);
 	CreateNative("PSAPI_CanProductBeBought", Native_CanProductBeBought);
+	CreateNative("PSAPI_RefundProducts", Native_RefundProducts);
 	CreateNative("PSAPI_FindProductByAlias", Native_FindProduct);
 	CreateNative("PSAPI_FetchProductCostByAlias", Native_FetchProductCostByAlias);
 	CreateNative("PSAPI_GetVersion", Native_GetVersion);
@@ -398,6 +429,19 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	RegPluginLibrary("PointSystemAPI");
 
 	return APLRes_Success;
+}
+
+public any Native_SetErrorByPriority(Handle plugin, int numParams)
+{
+	int priority = GetNativeCell(1);
+
+	if (priority >= g_errorPriority)
+	{
+		FormatNativeString(0, 2, 3, sizeof(g_error), _, g_error);
+
+		g_errorPriority = priority;
+	}
+	return Plugin_Handled;
 }
 
 public any Native_CreateCategory(Handle plugin, int numParams)
@@ -499,10 +543,6 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 	Call_PushCell(client);
 	Call_PushCell(targetclient);
 
-	char sError[256];
-	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushCell(sizeof(sError));
-
 	Action result;
 	Call_Finish(result);
 
@@ -510,7 +550,7 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 		return false;
 
 	bool bShouldReturn;
-	sError[0] = EOS;
+	char sError[1];
 
 	if (PSAPI_GetErrorFromBuyflags(client, sAlias, product, targetclient, sError, sizeof(sError), bShouldReturn))
 		return false;
@@ -547,10 +587,6 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 	Call_PushCell(alteredProduct.fCost);
 	Call_PushFloat(alteredProduct.fDelay);
 	Call_PushFloat(alteredProduct.fCooldown);
-
-	sError[0] = EOS;
-	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushCell(sizeof(sError));
 
 	result = Plugin_Continue;
 	Call_Finish(result);
@@ -595,6 +631,56 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 		return false;
 
 	return true;
+}
+
+public any Native_RefundProducts(Handle plugin, int numParams)
+{
+	char sAliases[1024];
+	GetNativeString(1, sAliases, sizeof(sAliases));
+
+	int client       = GetNativeCell(2);
+	int targetclient = GetNativeCell(3);
+
+	for (int i = 0; i < GetArraySize(g_aDelayedProducts); i++)
+	{
+		enDelayedProduct dProduct;
+
+		GetArrayArray(g_aDelayedProducts, i, dProduct);
+
+		int buyer      = GetClientOfUserId(dProduct.buyerUserId);
+		int targetUser = GetClientOfUserId(dProduct.targetUserId);
+
+		if (buyer == 0 || targetUser == 0)
+			continue;
+
+		if (buyer != client || targetUser != targetclient)
+			continue;
+
+		char sAliasArray[32][32];
+		int  iAliasSize = ExplodeString(sAliases, " ", sAliasArray, sizeof(sAliasArray), sizeof(sAliasArray[]));
+
+		for (int a = 0; a < iAliasSize; a++)
+		{
+			if (StrEqual(dProduct.sAlias, sAliasArray[a], false))
+			{
+				enProduct product;
+				int       productPos = LookupProductByAlias(dProduct.sAlias, product);
+
+				g_fPoints[client] += dProduct.fCost;
+
+				if (productPos != -1)
+					PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", product.sName, RoundToFloor(dProduct.fCost), GetClientPoints(client));
+
+				RemoveDelayedProductByTimer(dProduct.timer);
+
+				CloseHandle(dProduct.timer);
+
+				break;
+			}
+		}
+	}
+
+	return 0;
 }
 
 public any Native_FindProduct(Handle plugin, int numParams)
@@ -700,7 +786,9 @@ public void OnClientAuthorized(int client, const char[] auth)
 	protectcount[client]          = 0;
 	headshotcount[client]         = 0;
 	NextMultipleDamage[client]    = 0.0;
+	NextSpitterDamage[client]     = 0.0;
 	MultipleDamageStack[client]   = 0;
+	SpitterDamageStack[client]    = 0.0;
 	g_sLastBoughtAlias[client][0] = EOS;
 }
 
@@ -731,19 +819,8 @@ public Action Event_ChangeTeam(Handle event, const char[] name, bool dontBroadca
 		killcount[client]           = 0;
 		NextMultipleDamage[client]  = 0.0;
 		MultipleDamageStack[client] = 0;
-	}
-
-	return Plugin_Continue;
-}
-
-public Action Event_PlayerLeftStartArea(Handle event, const char[] name, bool dontBroadcast)
-{
-	int client = GetClientOfUserId(GetEventInt(event, "userid"));
-
-	if (client != 0 && IsPlayerAlive(client) && IsInTeam(client, L4DTeam_Survivor))
-	{
-		g_bIsAreaStart = true;
-		CreateTimer(0.1, CheckMultipleDamage, 0, TIMER_REPEAT);
+		NextSpitterDamage[client]   = 0.0;
+		SpitterDamageStack[client]  = 0.0;
 	}
 
 	return Plugin_Continue;
@@ -806,7 +883,6 @@ public Action Event_REnd(Handle event, char[] event_name, bool dontBroadcast)
 			killcount[i]              = 0;
 		}
 	}
-	g_bIsAreaStart = false;
 
 	int  EntityCount = GetEntityCount();
 	char sTemp[16];
@@ -1193,18 +1269,34 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 	ATTACKER
 	int dmg_type = GetEventInt(event, "type");
 
-	if (dmg_type & DMG_BURN) return Plugin_Continue;    // Blocks a nasty bug where a survivor joins infected after setting up a molotov to earn lots of points from damaging with fire.
+	if (dmg_type & DMG_BURN) return Plugin_Continue;    // Blocks a nasty bug where a survivor joins infected after setting up a molotov to earn lots of points from damaging his team with fire.
 
-	if (attacker != 0 && client != 0 && !IsFakeClient(attacker) && GetClientTeam(attacker) == view_as<int>(L4DTeam_Infected) && GetClientTeam(client) == view_as<int>(L4DTeam_Survivor) && IsAllowedGameMode() && GetConVarInt(Enable) == 1 && GetConVarInt(IHurt) > 0)
+	if (attacker != 0 && client != 0 && !IsFakeClient(attacker) && GetClientTeam(attacker) == view_as<int>(L4DTeam_Infected) && GetClientTeam(client) == view_as<int>(L4DTeam_Survivor) && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
 	{
-		hurtcount[attacker]++;
-
-		if (hurtcount[attacker] >= 3)
+		// Spitter appears to deal both DMG_RADIATION and DMG_ENERGYBEAM.
+		if (dmg_type & DMG_RADIATION && GetConVarFloat(ISpit) > 0.0)
 		{
-			g_fPoints[attacker] += GetConVarFloat(IHurt);
+			if (SpitterDamageStack[attacker] == 0)
+				NextSpitterDamage[attacker] = GetEngineTime() + 10.0;
 
-			MultipleDamageStack[attacker] += GetConVarInt(IHurt);
-			hurtcount[attacker] = 0;
+			g_fPoints[attacker] += GetConVarFloat(ISpit) * SPIT_DELAY;
+
+			SpitterDamageStack[attacker] += SPIT_DELAY;
+		}
+		else if (GetConVarInt(IHurt) > 0)
+		{
+			if (MultipleDamageStack[attacker] == 0)
+				NextMultipleDamage[attacker] = GetEngineTime() + 10.0;
+
+			hurtcount[attacker]++;
+
+			if (hurtcount[attacker] >= 3)
+			{
+				g_fPoints[attacker] += GetConVarFloat(IHurt);
+
+				MultipleDamageStack[attacker] += GetConVarInt(IHurt);
+				hurtcount[attacker] = 0;
+			}
 		}
 	}
 
@@ -1859,22 +1951,20 @@ public Action Command_SendPoints(int client, int args)
 				return Plugin_Handled;
 			}
 
+			ResetGlobalError();
+
 			Call_StartForward(g_fwOnCanBuyProducts);
 
 			Call_PushCell(client);
 			Call_PushCell(targetclient);
-
-			char sError[256];
-			Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-			Call_PushCell(sizeof(sError));
 
 			Action result;
 			Call_Finish(result);
 
 			if (result >= Plugin_Handled)
 			{
-				if (sError[0] != EOS)
-					PrintToChat(client, sError);
+				if (g_error[0] != EOS)
+					PrintToChat(client, g_error);
 
 				continue;
 			}
@@ -1937,10 +2027,6 @@ public Action Command_SendPointsList(int client, int args)
 
 		Call_PushCell(client);
 		Call_PushCell(i);
-
-		char sError[1];
-		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-		Call_PushCell(sizeof(sError));
 
 		Action result;
 		Call_Finish(result);
@@ -2075,22 +2161,20 @@ public int BuyListMenu_Handler(Handle hMenu, MenuAction action, int client, int 
 
 void BuildBuyMenu(int client, int iCategory = -1)
 {
+	ResetGlobalError();
+
 	Call_StartForward(g_fwOnCanBuyProducts);
 
 	Call_PushCell(client);
 	Call_PushCell(client);
-
-	char sError[256];
-	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushCell(sizeof(sError));
 
 	Action result;
 	Call_Finish(result);
 
 	if (result >= Plugin_Handled)
 	{
-		if (sError[0] != EOS)
-			PrintToChat(client, sError);
+		if (g_error[0] != EOS)
+			PrintToChat(client, g_error);
 
 		return;
 	}
@@ -2419,14 +2503,6 @@ public int ConfirmBuyMenu_Handler(Handle hMenu, MenuAction action, int client, i
 
 	return 0;
 }
-bool IsInTeam(int iClient, L4DTeam team)
-{
-	if (GetClientTeam(iClient) == view_as<int>(team))
-	{
-		return true;
-	}
-	return false;
-}
 
 stock bool IsTeamSurvivor(int client)
 {
@@ -2630,22 +2706,20 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 	{
 		int targetclient = target_list[i];
 
+		ResetGlobalError();
+
 		Call_StartForward(g_fwOnCanBuyProducts);
 
 		Call_PushCell(client);
 		Call_PushCell(targetclient);
-
-		char sError[256];
-		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-		Call_PushCell(sizeof(sError));
 
 		Action result;
 		Call_Finish(result);
 
 		if (result >= Plugin_Handled)
 		{
-			if (sError[0] != EOS)
-				PrintToChat(client, sError);
+			if (g_error[0] != EOS)
+				PrintToChat(client, g_error);
 
 			return;
 		}
@@ -2669,7 +2743,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 
 		alteredProduct.fCost = float(RoundToFloor(alteredProduct.fCost));
 
-		sError[0] = EOS;
+		char sError[256];
 		bool bShouldReturn;
 
 		if (PSAPI_GetErrorFromBuyflags(client, sFirstArg, alteredProduct, targetclient, sError, sizeof(sError), bShouldReturn))
@@ -2683,6 +2757,8 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 				continue;
 		}
 
+		ResetGlobalError();
+
 		Call_StartForward(g_fwOnTryBuyProduct);
 
 		Call_PushCell(client);
@@ -2694,22 +2770,17 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		Call_PushFloat(alteredProduct.fDelay);
 		Call_PushFloat(alteredProduct.fCooldown);
 
-		sError[0] = EOS;
-		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-		Call_PushCell(sizeof(sError));
-
 		result = Plugin_Continue;
 		Call_Finish(result);
 
 		if (result >= Plugin_Handled)
 		{
-			if (sError[0] != EOS)
-				PrintToChat(client, sError);
+			if (g_error[0] != EOS)
+				PrintToChat(client, g_error);
 
 			continue;
 		}
 
-		product.fNextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fCooldown;
 		g_fPoints[client] -= alteredProduct.fCost;
 
 		SetArrayArray(g_aProducts, productPos, product);
@@ -2752,10 +2823,23 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		}
 
 		DP.WriteFloat(alteredProduct.fDelay);
-		DP.WriteCell(client);
-		DP.WriteCell(targetclient);
+		DP.WriteCell(GetClientUserId(client));
+		DP.WriteCell(GetClientUserId(targetclient));
 		DP.WriteString(sFirstArg);
 		DP.WriteCellArray(alteredProduct, sizeof(alteredProduct));
+
+		product.fNextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fDelay + alteredProduct.fCooldown;
+
+		enDelayedProduct dProduct;
+
+		dProduct.timer        = hTimer;
+		dProduct.fCost        = alteredProduct.fCost;
+		dProduct.buyerUserId  = GetClientUserId(client);
+		dProduct.targetUserId = GetClientUserId(targetclient);
+		FormatEx(dProduct.sAlias, strlen(sFirstArg) + 1, sFirstArg);
+		dProduct.sInfo = alteredProduct.sInfo;
+
+		PushArrayArray(g_aDelayedProducts, dProduct);
 
 		if (alteredProduct.fDelay < 0.1)
 			TriggerTimer(hTimer, true);
@@ -2767,9 +2851,10 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	DP.Reset();
 
 	float fTimeleft    = DP.ReadFloat();
-	int   client       = DP.ReadCell();
-	int   targetclient = DP.ReadCell();
+	int   client       = GetClientOfUserId(DP.ReadCell());
+	int   targetclient = GetClientOfUserId(DP.ReadCell());
 	char  sFirstArg[32];
+
 	DP.ReadString(sFirstArg, sizeof(sFirstArg));
 
 	enProduct alteredProduct;
@@ -2785,29 +2870,63 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 
 	int productPos = LookupProductByAlias(sFirstArg, product);
 
-	// Should not happen/
+	// Should not happen
 	if (productPos == -1)
 	{
 		PrintToChat(client, "\x04[PS]\x03 Error: Product could not be found!");
+
+		RemoveDelayedProductByTimer(hTimer);
+
+		return Plugin_Stop;
+	}
+
+	else if (client == targetclient && client == 0)
+	{
+		RemoveDelayedProductByTimer(hTimer);
+
+		return Plugin_Stop;
+	}
+
+	else if (targetclient == 0)
+	{
+		RemoveDelayedProductByTimer(hTimer);
+		g_fPoints[client] += alteredProduct.fCost;
+		PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
 		return Plugin_Stop;
 	}
 
 	if (alteredProduct.iBuyFlags & BUYFLAG_REALTIME_REFUNDS)
 	{
+		ResetGlobalError();
+
 		Call_StartForward(g_fwOnCanBuyProducts);
 
 		Call_PushCell(client);
 		Call_PushCell(targetclient);
 
-		char sError[256];
-		Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-		Call_PushCell(sizeof(sError));
-
 		Action result;
 		Call_Finish(result);
 
 		if (result >= Plugin_Handled)
-			return Plugin_Handled;
+		{
+			g_fPoints[client] += alteredProduct.fCost;
+
+			if (alteredProduct.fCost > 0)
+			{
+				alteredProduct.fNextBuyProduct[targetclient] = 0.0;
+				SetArrayArray(g_aProducts, productPos, product);
+
+				PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+
+				PrintToChat(client, g_error);
+			}
+
+			RemoveDelayedProductByTimer(hTimer);
+
+			return Plugin_Stop;
+		}
+
+		ResetGlobalError();
 
 		Call_StartForward(g_fwOnRealTimeRefundProduct);
 
@@ -2830,8 +2949,13 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 			{
 				alteredProduct.fNextBuyProduct[targetclient] = 0.0;
 				SetArrayArray(g_aProducts, productPos, product);
-				PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+
+				PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+
+				PrintToChat(client, g_error);
 			}
+
+			RemoveDelayedProductByTimer(hTimer);
 
 			return Plugin_Stop;
 		}
@@ -2840,20 +2964,27 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	if (fTimeleft > 0.0)
 		return Plugin_Continue;
 
+	ResetGlobalError();
+
 	Call_StartForward(g_fwOnCanBuyProducts);
 
 	Call_PushCell(client);
 	Call_PushCell(targetclient);
 
-	char sError[256];
-	Call_PushStringEx(sError, sizeof(sError), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
-	Call_PushCell(sizeof(sError));
-
 	Action result;
 	Call_Finish(result);
 
 	if (result >= Plugin_Handled)
-		return Plugin_Handled;
+	{
+		if (g_error[0] != EOS)
+			PrintToChat(client, g_error);
+
+		RemoveDelayedProductByTimer(hTimer);
+
+		return Plugin_Stop;
+	}
+
+	ResetGlobalError();
 
 	Call_StartForward(g_fwOnBuyProductPost);
 
@@ -2877,8 +3008,12 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 		{
 			product.fNextBuyProduct[targetclient] = 0.0;
 			SetArrayArray(g_aProducts, productPos, product);
-			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+			PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+
+			PrintToChat(client, g_error);
 		}
+
+		RemoveDelayedProductByTimer(hTimer);
 
 		return Plugin_Stop;
 	}
@@ -2904,11 +3039,17 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 		{
 			product.fNextBuyProduct[targetclient] = 0.0;
 			SetArrayArray(g_aProducts, productPos, product);
-			PrintToChat(client, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+			PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+
+			PrintToChat(client, g_error);
 		}
+
+		RemoveDelayedProductByTimer(hTimer);
 
 		return Plugin_Stop;
 	}
+
+	RemoveDelayedProductByTimer(hTimer);
 
 	return Plugin_Stop;
 }
@@ -3004,4 +3145,115 @@ stock int FindEntityByTargetname(int startEnt, const char[] TargetName, bool cas
 stock int GetClientPoints(int client)
 {
 	return RoundToFloor(g_fPoints[client]);
+}
+
+/**
+ * Adds an informational string to the server's public "tags".
+ * This string should be a short, unique identifier.
+ *
+ *
+ * @param tag            Tag string to append.
+ * @noreturn
+ */
+stock void AddServerTag2(const char[] tag)
+{
+	Handle hTags = INVALID_HANDLE;
+	hTags        = FindConVar("sv_tags");
+
+	if (hTags != INVALID_HANDLE)
+	{
+		char tags[50];    // max size of sv_tags cvar
+		GetConVarString(hTags, tags, sizeof(tags));
+		if (StrContains(tags, tag, true) > 0) return;
+		if (strlen(tags) == 0)
+		{
+			Format(tags, sizeof(tags), tag);
+		}
+		else
+		{
+			Format(tags, sizeof(tags), "%s,%s", tags, tag);
+		}
+		SetConVarString(hTags, tags, true);
+	}
+}
+
+/**
+ * Removes a tag previously added by the calling plugin.
+ *
+ * @param tag            Tag string to remove.
+ * @noreturn
+ */
+stock void RemoveServerTag2(const char[] tag)
+{
+	Handle hTags = INVALID_HANDLE;
+	hTags        = FindConVar("sv_tags");
+
+	if (hTags != INVALID_HANDLE)
+	{
+		char tags[50];    // max size of sv_tags cvar
+		GetConVarString(hTags, tags, sizeof(tags));
+		if (StrEqual(tags, tag, true))
+		{
+			Format(tags, sizeof(tags), "");
+			SetConVarString(hTags, tags, true);
+			return;
+		}
+
+		int pos = StrContains(tags, tag, true);
+		int len = strlen(tags);
+		if (len > 0 && pos > -1)
+		{
+			bool found;
+			char taglist[50][50];
+			ExplodeString(tags, ",", taglist, sizeof(taglist[]), sizeof(taglist));
+			for (int i = 0; i < sizeof(taglist[]); i++)
+			{
+				if (StrEqual(taglist[i], tag, true))
+				{
+					Format(taglist[i], sizeof(taglist), "");
+					found = true;
+					break;
+				}
+			}
+			if (!found) return;
+			ImplodeStrings(taglist, sizeof(taglist[]), ",", tags, sizeof(tags));
+			if (pos == 0)
+			{
+				tags[0] = 0x20;
+			}
+			else if (pos == len - 1)
+			{
+				Format(tags[strlen(tags) - 1], sizeof(tags), "");
+			}
+			else
+			{
+				ReplaceString(tags, sizeof(tags), ",,", ",");
+			}
+			SetConVarString(hTags, tags, true);
+		}
+	}
+}
+
+stock void ResetGlobalError()
+{
+	g_error[0]      = EOS;
+	g_errorPriority = 0;
+}
+
+stock bool RemoveDelayedProductByTimer(Handle hTimer)
+{
+	// i can be decremented, mustn't use int iSize = GetArraySize(g_aProducts)
+	for (int i = 0; i < GetArraySize(g_aDelayedProducts); i++)
+	{
+		enDelayedProduct dProduct;
+		GetArrayArray(g_aDelayedProducts, i, dProduct);
+
+		if (dProduct.timer == hTimer)
+		{
+			RemoveFromArray(g_aDelayedProducts, i);
+			return true;
+		}
+	}
+
+	return false;
 }

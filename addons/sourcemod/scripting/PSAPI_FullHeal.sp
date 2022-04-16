@@ -137,14 +137,14 @@ public Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAli
 	return Plugin_Continue;
 }
 
-public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown, char[] sError, int iErrorLen)
+public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
 	if (StrEqual(sInfo, "Full Heal") || StrEqual(sInfo, "Partial Heal"))
 	{
 		// Need to fix this with incap, as max health is the same when incapped so 100 hp incap = no heal.
 		if (GetEntityHealth(target) == PSAPI_GetEntityMaxHealth(target) && !L4D_IsPlayerIncapacitated(target) && !L4D_IsPlayerPinned(target))
 		{
-			FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 You are at max health");
+			PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Error:\x01 You are at max health");
 			return Plugin_Handled;
 		}
 
@@ -152,17 +152,17 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 		{
 			if (buyer != target)
 			{
-				FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 Tanks must heal themselves because they are limited in buying health.");
+				PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Error:\x01 Tanks must heal themselves because they are limited in buying health.");
 				return Plugin_Handled;
 			}
 			else if (g_iTankHealsBought[target] >= GetConVarInt(g_hTankHealMax))
 			{
-				FormatEx(sError, iErrorLen, "\x04[PS]\x03 Error:\x01 Max Tank heal limit");
+				PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Error:\x01 Max Tank heal limit");
 				return Plugin_Handled;
 			}
 			else if (L4D_IsPlayerIncapacitated(target))
 			{
-				FormatEx(sError, iErrorLen, "\x04[PS-Anti Exploit]\x03 You cannot heal yourself as a dying tank.");
+				PSAPI_SetErrorByPriority(50, "\x04[PS-Anti Exploit]\x03 You cannot heal yourself as a dying tank.");
 				return Plugin_Handled;
 			}
 		}
