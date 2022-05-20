@@ -291,7 +291,7 @@ public void L4D_OnServerHibernationUpdate(bool hibernating)
  * Description
  *
  * @param victim             Muse that was honored to model a karma event
- * @param attacker           Artist that crafted the karma event
+ * @param attacker           Artist that crafted the karma event. The only way to check if attacker is valid is: if(attacker > 0)
  * @param KarmaName          Name of karma: "Charge", "Impact", "Jockey", "Slap", "Punch", "Smoke"
  * @param bBird              true if a bird charge event occured, false if a karma kill was detected or performed.
  * @param bKillConfirmed     Whether or not this indicates the complete death of the player. This is NOT just !IsPlayerAlive(victim)
@@ -305,9 +305,14 @@ public void L4D_OnServerHibernationUpdate(bool hibernating)
  * @note					If the plugin makes a kill confirmed without a previous announcement without kill confirmed,
                             it compensates by sending two consecutive events, one without kill confirmed, one with kill confirmed.
 
+
+
  */
 public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const char[] KarmaName, bool bBird, bool bKillConfirmed, bool bOnlyConfirmed)
 {
+	if (attacker <= 0)
+		return;
+
 	if ((bOnlyConfirmed && bKillConfirmed) || (!bOnlyConfirmed && !bKillConfirmed))
 	{
 		int Points = GetConVarInt(IKarma);
@@ -321,7 +326,7 @@ public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const cha
 public Action CheckMultipleDamage(Handle hTimer, any number)
 {
 	if (!L4D_HasAnySurvivorLeftSafeAreaStock())
-		return Plugin_Stop;
+		return Plugin_Continue;
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -351,7 +356,7 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 
 public void OnMapStart()
 {
-	CreateTimer(0.1, CheckMultipleDamage, 0, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+	CreateTimer(0.1, CheckMultipleDamage, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 	CreateTimer(1.0, Timer_Cleanup, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 
 	GetCurrentMap(MapName, sizeof(MapName));
@@ -776,20 +781,21 @@ public any Native_FullHeal(Handle plugin, int numParams)
 
 public void OnClientAuthorized(int client, const char[] auth)
 {
-	if (g_fPoints[client] > GetConVarFloat(StartPoints)) return;
-	g_fPoints[client]              = GetConVarFloat(StartPoints);
-	g_fSavedSurvivorPoints[client] = GetConVarFloat(StartPoints);
-	g_fSavedInfectedPoints[client] = GetConVarFloat(StartPoints);
-	if (killcount[client] > 0) return;
-	killcount[client]             = 0;
-	hurtcount[client]             = 0;
-	protectcount[client]          = 0;
-	headshotcount[client]         = 0;
 	NextMultipleDamage[client]    = 0.0;
 	NextSpitterDamage[client]     = 0.0;
 	MultipleDamageStack[client]   = 0;
 	SpitterDamageStack[client]    = 0.0;
 	g_sLastBoughtAlias[client][0] = EOS;
+
+	if (g_fPoints[client] > GetConVarFloat(StartPoints)) return;
+	g_fPoints[client]              = GetConVarFloat(StartPoints);
+	g_fSavedSurvivorPoints[client] = GetConVarFloat(StartPoints);
+	g_fSavedInfectedPoints[client] = GetConVarFloat(StartPoints);
+	if (killcount[client] > 0) return;
+	killcount[client]     = 0;
+	hurtcount[client]     = 0;
+	protectcount[client]  = 0;
+	headshotcount[client] = 0;
 }
 
 public Action Event_ChangeTeam(Handle event, const char[] name, bool dontBroadcast)
@@ -1014,7 +1020,8 @@ public Action Event_Death(Handle event, const char[] name, bool dontBroadcast)
 			g_fPoints[attacker] += GetConVarFloat(SSIKill);
 			if (GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, GetConVarInt(SSIKill), GetClientPoints(attacker));
 		}
-		if (GetClientTeam(attacker) == 3)
+		// If headshot == 2 ( which is a boolean usually ) then a karma kill occured.
+		if (GetClientTeam(attacker) == 3 && GetEventInt(event, "headshot") != 2)
 		{
 			if (GetConVarInt(IKill) <= 0 || GetClientTeam(client) == 3) return Plugin_Continue;
 			g_fPoints[attacker] += GetConVarFloat(IKill);
@@ -3162,6 +3169,10 @@ stock void AddServerTag2(const char[] tag)
 
 	if (hTags != INVALID_HANDLE)
 	{
+		int flags = GetConVarFlags(hTags);
+
+		SetConVarFlags(hTags, flags & ~FCVAR_NOTIFY);
+
 		char tags[50];    // max size of sv_tags cvar
 		GetConVarString(hTags, tags, sizeof(tags));
 		if (StrContains(tags, tag, true) > 0) return;
@@ -3174,6 +3185,8 @@ stock void AddServerTag2(const char[] tag)
 			Format(tags, sizeof(tags), "%s,%s", tags, tag);
 		}
 		SetConVarString(hTags, tags, true);
+
+		SetConVarFlags(hTags, flags);
 	}
 }
 
@@ -3190,6 +3203,10 @@ stock void RemoveServerTag2(const char[] tag)
 
 	if (hTags != INVALID_HANDLE)
 	{
+		int flags = GetConVarFlags(hTags);
+
+		SetConVarFlags(hTags, flags & ~FCVAR_NOTIFY);
+
 		char tags[50];    // max size of sv_tags cvar
 		GetConVarString(hTags, tags, sizeof(tags));
 		if (StrEqual(tags, tag, true))
@@ -3229,7 +3246,10 @@ stock void RemoveServerTag2(const char[] tag)
 			{
 				ReplaceString(tags, sizeof(tags), ",,", ",");
 			}
+
 			SetConVarString(hTags, tags, true);
+
+			SetConVarFlags(hTags, flags);
 		}
 	}
 }
