@@ -116,7 +116,7 @@ native Action PSAPI_SetErrorByPriority(int priority, char[] error, any ...);
 // Creates or edits a category.
 // Not all buy flags work with categories, check BUYFLAG_* for more info.
 // sID is an identifier that is not shared to the player.
-native int PSAPI_CreateCategory(int iCategory, char[] sID, char[] sName, int iBuyFlags)
+native int PSAPI_CreateCategory(int iCategory, char[] sID, char[] sName, int iBuyFlags);
 
 // Creates or edits a product.
 // The first alias is documented in the buy menu.
@@ -212,7 +212,7 @@ forward Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, con
 // fTimeleft can be 0.0, and in this case, in the same frame PointSystemAPI_OnBuyProductPost will be called, so you don't need PointSystemAPI_OnBuyProductPost if you have this.
 // This forward is triggered by PSAPI_CanProductBeBought so always use PSAPI_SetErrorByPriority
 // Return Plugin_Handled to refund purchase
-forward Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fTimeleft)
+forward Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fTimeleft);
 	
 	
 // If a delay exists, called several seconds after PointSystemAPI_OnTryBuyProduct. Otherwise this is called instantly. 
@@ -330,7 +330,7 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct alt
 	}
 	else if(PSAPI_GetPoints(buyer) < alteredProduct.fCost)
 	{
-		FormatEx(sError, iLength, PSAPI_NOT_ENOUGH_POINTS, RoundToFloor(alteredProduct.fCost) - RoundToFloor(PSAPI_GetPoints(buyer)), RoundToFloor(PSAPI_GetPoints(buyer)))
+		FormatEx(sError, iLength, PSAPI_NOT_ENOUGH_POINTS, RoundToFloor(alteredProduct.fCost) - RoundToFloor(PSAPI_GetPoints(buyer)), RoundToFloor(PSAPI_GetPoints(buyer)));
 
 		return true;
 	}
