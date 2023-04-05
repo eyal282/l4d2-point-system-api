@@ -28,6 +28,8 @@ int   g_errorPriority;
 float g_fPoints[MAXPLAYERS + 1] = { 0.0, ... };
 float g_fSavedSurvivorPoints[MAXPLAYERS + 1], g_fSavedInfectedPoints[MAXPLAYERS + 1] = { 0.0, ... };
 
+int g_iGiveMeUserId;
+
 // MultipleDamageStack is not attack count, it's point count accumulated.
 int   MultipleDamageStack[MAXPLAYERS + 1];
 float NextMultipleDamage[MAXPLAYERS + 1];
@@ -201,6 +203,11 @@ public void OnPluginStart()
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
 
+	AddCommandListener(Listener_Say, "say");
+	AddCommandListener(Listener_Say, "say_team");
+
+	AddMultiTargetFilter("@giveme", TargetFilter_GiveMe, "a survivor in trouble", false);
+
 	RegConsoleCmd("sm_ps", Command_PointSystem);
 	RegConsoleCmd("sm_rebuy", Command_Rebuy);
 	RegConsoleCmd("sm_shortcuts", Command_Aliases);
@@ -219,6 +226,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_sp", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
 	RegConsoleCmd("sm_splist", Command_SendPointsList, "sm_sendpointslist [amount/all]");
 	RegAdminCmd("sm_heal", Command_Heal, ADMFLAG_SLAY, "sm_heal <target> [amount] - Won't reset incaps if you select amount.");
+
 	RegAdminCmd("sm_incap", Command_Incap, ADMFLAG_SLAY, "sm_incap <target>");
 	RegAdminCmd("sm_setincap", Command_SetIncap, ADMFLAG_SLAY, "sm_setincap <target> <amount left>");
 	RegAdminCmd("sm_setincaps", Command_SetIncap, ADMFLAG_ROOT, "sm_setincap <target> <amount left>");
@@ -226,6 +234,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_setpoints", Command_SPoints, ADMFLAG_SLAY, "sm_setpoints <target> [amount]");
 	RegAdminCmd("sm_exec", Command_Exec, ADMFLAG_SLAY, "sm_exec <target> <command>");
 	RegAdminCmd("sm_fakeexec", Command_FakeExec, ADMFLAG_SLAY, "sm_fakeexec <target> <command>");
+
 	HookEvent("infected_death", Event_Kill, EventHookMode_Pre);
 	HookEvent("player_incapacitated", Event_Incap);
 	HookEvent("player_death", Event_Death);
@@ -356,6 +365,8 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 
 public void OnMapStart()
 {
+	g_iGiveMeUserId = 0;
+
 	CreateTimer(0.1, CheckMultipleDamage, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 	CreateTimer(1.0, Timer_Cleanup, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 
@@ -1310,6 +1321,40 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 	return Plugin_Continue;
 }
 
+public bool TargetFilter_GiveMe(const char[] pattern, ArrayList clients)
+{
+	int target = GetClientOfUserId(g_iGiveMeUserId);
+
+	if(target != 0)
+	{
+		PushArrayCell(clients, target);
+		return true;
+	}
+
+	return false;
+}
+public Action Listener_Say(int client, char[] sArg, int args)
+{
+	char sArgString[64];
+	GetCmdArgString(sArgString, sizeof(sArgString));
+
+	TrimString(sArgString);
+
+	if(GetClientTeam(client) != view_as<int>(L4DTeam_Survivor))
+	{
+		return Plugin_Continue;
+	}
+	else if(!IsPlayerAlive(client))
+	{
+		return Plugin_Continue;
+	}
+	else if(StrEqual(sArgString, "sp") || StrEqual(sArgString, "!sp") || StrEqual(sArgString, "sp me") || StrEqual(sArgString, "!sp me"))
+	{
+		g_iGiveMeUserId = GetClientUserId(client);
+	}
+
+	return Plugin_Continue;
+}
 public Action Command_PointSystem(int client, int args)
 {
 	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_buy <alias> [target]\x03 to buy products.");
