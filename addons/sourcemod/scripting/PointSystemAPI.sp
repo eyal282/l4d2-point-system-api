@@ -25,6 +25,8 @@ GlobalForward g_fwOnShouldGiveProduct;    // We should now give the product to t
 
 char  g_error[256];
 int   g_errorPriority;
+int   g_iRequestPointsTarget[MAXPLAYERS + 1] = { 0, ... };
+float g_fRequestedPoints[MAXPLAYERS + 1] = { 0.0, ... };
 float g_fPoints[MAXPLAYERS + 1] = { 0.0, ... };
 float g_fSavedSurvivorPoints[MAXPLAYERS + 1], g_fSavedInfectedPoints[MAXPLAYERS + 1] = { 0.0, ... };
 
@@ -99,6 +101,7 @@ Handle IKarma             = INVALID_HANDLE;
 
 Handle ResetPoints = INVALID_HANDLE;
 Handle StartPoints = INVALID_HANDLE;
+Handle RequestPoints = INVALID_HANDLE;
 Handle DeadBuy     = INVALID_HANDLE;
 
 public Plugin myinfo =
@@ -162,6 +165,7 @@ public void OnPluginStart()
 	AutoExecConfig_SetFile("PointSystemAPI");
 
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
+	RequestPoints	   = AutoExecConfig_CreateConVar("l4d2_points_request_points", "1", "Enable !rp command?");
 	DeadBuy            = AutoExecConfig_CreateConVar("l4d2_points_dead_buy", "1", "0 - You can't buy products as a dead survivor. 1 - You cannot buy products for other survivors as a dead survivor. 2 - You can buy products as a dead survivor.");
 	Notifications      = AutoExecConfig_CreateConVar("l4d2_points_notify", "1", "Show messages when points are earned?");
 	Enable             = AutoExecConfig_CreateConVar("l4d2_points_enable", "1", "Enable Point System?");
@@ -209,6 +213,7 @@ public void OnPluginStart()
 	AddMultiTargetFilter("@giveme", TargetFilter_GiveMe, "a survivor in trouble", false);
 
 	RegConsoleCmd("sm_ps", Command_PointSystem);
+	RegConsoleCmd("sm_rp", Command_RequestPoints);
 	RegConsoleCmd("sm_rebuy", Command_Rebuy);
 	RegConsoleCmd("sm_shortcuts", Command_Aliases);
 	RegConsoleCmd("sm_shortcut", Command_Aliases);
@@ -365,6 +370,10 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 
 public void OnMapStart()
 {
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		g_iRequestPointsTarget[i] = 0;
+	}
 	g_iGiveMeUserId = 0;
 
 	CreateTimer(0.1, CheckMultipleDamage, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
@@ -1363,12 +1372,197 @@ public Action Command_PointSystem(int client, int args)
 		PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_autobuy\x03 to buy certain survivor products automatically");
 
 	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_sp\x03 to send points for your teammates");
+
+	if(GetConVarBool(RequestPoints))
+		PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_rp\x03 to ask your teammates for points.");
+
 	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_splist / sm_buylist\x03 if your teammates have weird names");
 	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_alias\x03 if you want to find a better alias for a product");
 
 	return Plugin_Handled;
 }
 
+public Action Command_RequestPoints(int client, int args)
+{
+	if(!GetConVarBool(RequestPoints))
+	{
+		PrintToChat(client, "\x04[PS]\x03 This command is disabled.");
+		return Plugin_Handled;
+	}
+
+	if (args < 1)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_rp <points to request>");
+		return Plugin_Handled;
+	}
+
+	char arg[MAX_NAME_LENGTH];
+	GetCmdArg(1, arg, sizeof(arg));
+
+	float pointsToRequest = float(RoundToFloor(StringToFloat(arg)));
+
+	if (pointsToRequest <= 0.0)
+	{
+		PrintToChat(client, "\x04[PS]\x03 Error: Invalid value to request!");
+		return Plugin_Handled;
+	}
+
+	int count = 0;
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if(client == i)
+			continue;
+
+		else if (!IsClientInGame(i))
+			continue;
+
+		else if (IsFakeClient(i))
+			continue;
+
+		else if (GetClientTeam(i) != GetClientTeam(client))
+			continue;
+
+		else if(GetClientMenu(i) != MenuSource_None)
+			continue;
+
+		else if(GetClientPoints(i) < pointsToRequest)
+			continue;
+
+		Call_StartForward(g_fwOnCanBuyProducts);
+
+		Call_PushCell(i);
+		Call_PushCell(client);
+
+		Action result;
+		Call_Finish(result);
+
+		if (result >= Plugin_Handled)
+			continue;
+			
+		count++;
+
+		g_fRequestedPoints[i] = pointsToRequest;
+		g_iRequestPointsTarget[i] = GetClientUserId(client);
+
+		RebuildRequestPointsPanel(i);
+	}
+
+	if(count == 0)
+	{
+		PrintToChat(client, "\x04[PS]\x03 No teammates found with\x05 %d\x03 points", RoundToFloor(pointsToRequest));
+	}
+	else
+	{
+		PrintToChat(client, "\x04[PS]\x03 Found\x04 %i\x03 teammates with\x05 %d\x03 points", count, RoundToFloor(pointsToRequest));
+	}
+
+	return Plugin_Handled;
+}
+
+public void RebuildRequestPointsPanel(int i)
+{
+	int client = GetClientOfUserId(g_iRequestPointsTarget[i]);
+
+	if(client == 0)
+	{
+		CancelClientMenu(i);
+		return;
+	}
+
+	Handle hStyleRadio = GetMenuStyleHandle(MenuStyle_Radio);
+
+	Handle hPanel = CreatePanel(hStyleRadio);
+	SetPanelCurrentKey(hPanel, 6);
+	DrawPanelItem(hPanel, "Yes");
+
+	SetPanelCurrentKey(hPanel, 7);
+	DrawPanelItem(hPanel, "No");
+
+	SetPanelCurrentKey(hPanel, 9);
+	DrawPanelItem(hPanel, "Exit");
+
+	SetPanelKeys(hPanel, (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 8));
+
+	char TempFormat[256];
+	FormatEx(TempFormat, sizeof(TempFormat), "A teammate needs help!\nSend %d points to %N?", RoundToFloor(g_fRequestedPoints[i]), client);
+	SetPanelTitle(hPanel, TempFormat, false);
+
+	SendPanelToClient(hPanel, i, PanelHandler_RequestPoints, 1);
+}
+
+public int PanelHandler_RequestPoints(Handle hPanel, MenuAction action, int i, int item)
+{
+	if (action == MenuAction_End)
+	{
+		CloseHandle(hPanel);
+
+		return 0;
+	}
+	else if(action == MenuAction_Cancel)
+	{
+		RebuildRequestPointsPanel(i);
+
+		return 0;
+	}
+	else if (action == MenuAction_Select)
+	{
+		if (item <= 5)
+		{
+			// Nasty hack that ignores double nades ( molotov and flashbang for example ) but I'll live for now...
+			int weapon = GetPlayerWeaponSlot(i, item - 1);
+
+			if (weapon != -1)
+			{
+				char Classname[64];
+
+				GetEdictClassname(weapon, Classname, sizeof(Classname));
+
+				FakeClientCommand(i, "use %s", Classname);
+			}
+		}
+		else if(item == 6)
+		{
+			int userId = g_iRequestPointsTarget[i];
+
+			int client = GetClientOfUserId(userId);
+
+			g_iRequestPointsTarget[i] = 0;
+
+			if(GetClientPoints(i) < g_fRequestedPoints[i])
+			{
+				
+				RebuildRequestPointsPanel(i);
+
+				return 0;
+			}
+			if(client != 0)
+			{
+				FakeClientCommand(i, "sm_sp #%i %i", userId, RoundToFloor(g_fRequestedPoints[i]));
+			}
+
+			for (int a = 1; a <= MaxClients; a++)
+			{
+				if(!IsClientInGame(a))
+					continue;
+
+				else if(g_iRequestPointsTarget[a] != userId)
+					continue;
+
+				g_iRequestPointsTarget[a] = 0;
+			}
+		}
+		else if(item == 7 || item == 9)
+		{
+			g_iRequestPointsTarget[i] = 0;
+		}
+
+		
+		RebuildRequestPointsPanel(i);
+	}
+
+	return 0;
+}
 public Action Command_Rebuy(int client, int args)
 {
 	// No target, so let's make the target the buyer's userid?
@@ -1698,6 +1892,16 @@ public Action Command_Points(int client, int args)
 	bool tn_is_ml;
 
 	int targetclient;
+	
+	Handle convar = FindConVar("target_los_teammates_only");
+
+	int oldValue;
+
+	if(convar != INVALID_HANDLE)
+	{
+		oldValue = GetConVarInt(convar);
+		SetConVarInt(convar, 1);
+	}
 
 	if ((target_count = ProcessTargetString(
 			 arg,
@@ -1737,6 +1941,12 @@ public Action Command_Points(int client, int args)
 	{
 		ReplyToTargetError(client, target_count);
 	}
+
+	if(convar != INVALID_HANDLE)
+	{
+		SetConVarInt(convar, oldValue);
+	}
+
 	return Plugin_Handled;
 }
 
@@ -1759,6 +1969,16 @@ public Action Command_SPoints(int client, int args)
 	bool tn_is_ml;
 
 	int targetclient;
+
+	Handle convar = FindConVar("target_los_teammates_only");
+
+	int oldValue;
+	
+	if(convar != INVALID_HANDLE)
+	{
+		oldValue = GetConVarInt(convar);
+		SetConVarInt(convar, 1);
+	}
 
 	if ((target_count = ProcessTargetString(
 			 arg,
@@ -1797,6 +2017,11 @@ public Action Command_SPoints(int client, int args)
 	else
 	{
 		ReplyToTargetError(client, target_count);
+	}
+
+	if(convar != INVALID_HANDLE)
+	{
+		SetConVarInt(convar, oldValue);
 	}
 	return Plugin_Handled;
 }
@@ -1867,6 +2092,7 @@ public Action Command_Exec(int client, int args)
 	{
 		ReplyToTargetError(client, target_count);
 	}
+
 	return Plugin_Handled;
 }
 
@@ -1973,6 +2199,16 @@ public Action Command_SendPoints(int client, int args)
 
 	int targetclient;
 
+	Handle convar = FindConVar("target_los_teammates_only");
+
+	int oldValue;
+	
+	if(convar != INVALID_HANDLE)
+	{
+		oldValue = GetConVarInt(convar);
+		SetConVarInt(convar, 1);
+	}
+
 	if ((target_count = ProcessTargetString(
 			 arg,
 			 client,
@@ -2000,7 +2236,7 @@ public Action Command_SendPoints(int client, int args)
 			else if (pointsToSend > g_fPoints[client])
 			{
 				PrintToChat(client, "\x04[PS]\x03 Error: Not enough points to send! (Σ: \x05%d\x03)", GetClientPoints(client));
-				return Plugin_Handled;
+				break;
 			}
 
 			ResetGlobalError();
@@ -2034,6 +2270,11 @@ public Action Command_SendPoints(int client, int args)
 	else
 	{
 		ReplyToTargetError(client, target_count);
+	}
+
+	if(convar != INVALID_HANDLE)
+	{
+		SetConVarInt(convar, oldValue);
 	}
 
 	return Plugin_Handled;
@@ -2722,6 +2963,16 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 	int  target_list[MAXPLAYERS + 1], target_count;
 	bool tn_is_ml;
 
+	Handle convar = FindConVar("target_los_teammates_only");
+
+	int oldValue;
+	
+	if(convar != INVALID_HANDLE)
+	{
+		oldValue = GetConVarInt(convar);
+		SetConVarInt(convar, 1);
+	}
+
 	fake_target_count = ProcessTargetString(
 		sSecondArg,
 		client,
@@ -2773,7 +3024,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			if (g_error[0] != EOS)
 				PrintToChat(client, g_error);
 
-			return;
+			break;
 		}
 
 		Call_StartForward(g_fwOnGetParametersProduct);
@@ -2803,7 +3054,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			PrintToChat(client, sError);
 
 			if (bShouldReturn)
-				return;
+				break;
 
 			else
 				continue;
@@ -2895,6 +3146,11 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 
 		if (alteredProduct.fDelay < 0.1)
 			TriggerTimer(hTimer, true);
+	}
+
+	if(convar != INVALID_HANDLE)
+	{
+		SetConVarInt(convar, oldValue);
 	}
 }
 
