@@ -15,7 +15,7 @@
 char g_sLastTargetname[64];
 
 int g_iLastEquipFound = INVALID_ENT_REFERENCE;
-//float g_fLastEquipFoundTime;
+float g_fLastEquipFoundTime;
 
 Handle PointsPistol    = INVALID_HANDLE;
 Handle PointsMagnum    = INVALID_HANDLE;
@@ -165,7 +165,7 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	g_iLastEquipFound = INVALID_ENT_REFERENCE;
-	//g_fLastEquipFoundTime = 0.0;
+	g_fLastEquipFoundTime = 0.0;
 }
 
 public void OnClientPutInServer(int client)
@@ -189,7 +189,7 @@ public void SDKHook_OnWeaponEquipPost(int client, int weapon)
 	{
 		g_iLastEquipFound = EntIndexToEntRef(weapon);
 
-		//g_fLastEquipFoundTime = GetGameTime();
+		g_fLastEquipFoundTime = GetGameTime();
 	}
 }
 
@@ -424,13 +424,13 @@ stock int CreateSpittableObject(int client, const char[] sClassname)
 		char sActiveWeaponClassname[32];
 		GetEntityClassname(weapon, sActiveWeaponClassname, sizeof(sActiveWeaponClassname));
 
-		if (/*StrEqual(sActiveWeaponClassname, "weapon_gascan") || */StrEqual(sActiveWeaponClassname, "weapon_oxygentank")
+		if (StrEqual(sActiveWeaponClassname, "weapon_gascan") || StrEqual(sActiveWeaponClassname, "weapon_oxygentank")
 		|| StrEqual(sActiveWeaponClassname, "weapon_fireworkcrate") || StrEqual(sActiveWeaponClassname, "weapon_propanetank"))
 		{
 			return -1;
 		}
 
-		SDKHooks_DropWeapon(client, weapon, _, _, true);
+		// SDKHooks_DropWeapon(client, weapon, _, _, true);
 	}
 
 	int iEnt = CreateEntityByName("prop_physics");
@@ -529,13 +529,11 @@ public void OnEntityDestroyed(int entity)
 			{
 				int prevEntity = EntRefToEntIndex(g_iLastEquipFound);
 
-				if(prevEntity != INVALID_ENT_REFERENCE)
+				if(prevEntity != INVALID_ENT_REFERENCE && GetGameTime() - g_fLastEquipFoundTime == 0.0)
 				{
-					g_sLastTargetname = sTargetname;
-
-					//g_fLastEquipFoundTime = GetGameTime();
 					
 					SetEntPropString(prevEntity, Prop_Data, "m_iName", sTargetname);
+					
 					ApplyGlowAndVulnerability(prevEntity);
 				}
 
@@ -584,7 +582,7 @@ public void OnCarryObjectSpawnPost(int entity)
 				
 			g_iLastEquipFound = EntIndexToEntRef(entity);
 
-			//g_fLastEquipFoundTime = GetGameTime();
+			g_fLastEquipFoundTime = GetGameTime();
 			
 		}
 	}
