@@ -499,7 +499,7 @@ stock bool PSAPI_SpawnInfectedBossByClassname(int client, const char[] name, boo
 
 stock void PSAPI_SetGasolineGlow(int iWeapon)
 {
-	L4D2_SetEntityGlow(iWeapon, L4D2Glow_Constant, 0, 0, { 0, 200, 0 }, true );
+	L4D2_SetEntityGlow(iWeapon, L4D2Glow_Constant, 0, 0, { 0, 200, 0 }, false);
 }
 
 stock int PSAPI_GetEntityMaxHealth(int entity)

@@ -12,7 +12,9 @@
 
 ConVar g_hCommonLimit;
 int    ucommonleft;
+int    jimmiesleft;
 int    witchesinqueue;
+float g_fPermanentUmobInvested;
 
 Handle PointsSuicide           = INVALID_HANDLE;
 Handle PointsExtinguish        = INVALID_HANDLE;
@@ -28,6 +30,8 @@ Handle PointsWitch             = INVALID_HANDLE;
 Handle PointsTank              = INVALID_HANDLE;
 Handle PointsHorde             = INVALID_HANDLE;
 Handle PointsUmob              = INVALID_HANDLE;
+Handle PointsJmob              = INVALID_HANDLE;
+Handle PointsPermanentUmob              = INVALID_HANDLE;
 Handle PointsTerrorPerWitch    = INVALID_HANDLE;
 Handle WitchLimit              = INVALID_HANDLE;
 
@@ -37,7 +41,8 @@ char g_sUncommonModels[][] = {
 	"models/infected/common_male_clown.mdl",
 	"models/infected/common_male_mud.mdl",
 	"models/infected/common_male_roadcrew.mdl",
-	"models/infected/common_male_fallen_survivor.mdl"
+	"models/infected/common_male_fallen_survivor.mdl",
+	"models/infected/common_male_jimmy.mdl"
 };
 
 public Plugin myinfo =
@@ -69,6 +74,8 @@ public void OnPluginStart()
 	PointsTank              = AutoExecConfig_CreateConVar("l4d2_points_tank", "30", "How many points does a tank cost");
 	PointsHorde             = AutoExecConfig_CreateConVar("l4d2_points_horde", "15", "How many points does a horde cost");
 	PointsUmob              = AutoExecConfig_CreateConVar("l4d2_points_umob", "12", "How many points does an uncommon mob cost");
+	PointsJmob              = AutoExecConfig_CreateConVar("l4d2_points_jmob", "-1", "How many points does a jimmy mob cost ( this can crash your server )");
+	PointsPermanentUmob     = AutoExecConfig_CreateConVar("l4d2_points_permanent_umob", "-1", "How many points does a permanent uncommon mob cost");
 	PointsTerrorPerWitch    = AutoExecConfig_CreateConVar("l4d2_points_terror_per_witch", "10", "How many points does a terror cost per witch");
 	WitchLimit              = AutoExecConfig_CreateConVar("l4d2_points_witch_limiter", "10", "Maximum amount of witches");
 
@@ -101,6 +108,8 @@ public void OnMapStart()
 		PrecacheModel(g_sUncommonModels[i], true);
 
 	ucommonleft = 0;
+	jimmiesleft = 0;
+	g_fPermanentUmobInvested = 0.0;
 
 	CreateTimer(1.0, Timer_CheckWitchCount, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 }
@@ -134,10 +143,21 @@ public void OnLibraryAdded(const char[] name)
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if (ucommonleft <= 0)
+	if (!StrEqual(classname, "infected", false))
 		return;
 
-	else if (!StrEqual(classname, "infected", false))
+	if(jimmiesleft > 0)
+	{
+		if (!IsModelPrecached("models/infected/common_male_jimmy.mdl"))
+			PrecacheModel("models/infected/common_male_jimmy.mdl");
+
+		SetEntityModel(entity, "models/infected/common_male_jimmy.mdl");
+
+		jimmiesleft--;
+
+		return;
+	}
+	else if (ucommonleft <= 0)
 		return;
 
 	int iRNG = GetRandomInt(0, sizeof(g_sUncommonModels) - 1);
@@ -386,6 +406,34 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		ucommonleft += GetConVarInt(g_hCommonLimit);
 
 		PSAPI_ExecuteCheatCommand(target, "z_spawn_old mob auto");
+		
+		g_fPermanentUmobInvested += fCost;
+		
+		if(GetConVarInt(PointsPermanentUmob) >= 0)
+		{
+			for (int i = 1; i <= MaxClients; i++)
+			{
+				if (!IsClientInGame(i))
+					continue;
+
+				else if (GetClientTeam(i) != view_as<int>(L4DTeam_Infected))
+					continue;
+
+				PrintToChat(i, "\x04[PS]\x03 %N\x01 invested \x05%d\x03 points to Permanent Uncommon Mob! (\x05%d\x01 / \x05%d \x03)", buyer, RoundToFloor(fCost), RoundToFloor(g_fPermanentUmobInvested), GetConVarInt(PointsPermanentUmob));
+			}
+
+			if(g_fPermanentUmobInvested >= GetConVarFloat(PointsPermanentUmob))
+			{
+				ucommonleft = 2000000000;
+			}
+		}
+	
+	}
+	else if (StrEqual(sInfo, "Jimmy Mob"))
+	{
+		jimmiesleft += GetConVarInt(g_hCommonLimit);
+
+		PSAPI_ExecuteCheatCommand(target, "z_spawn_old mob auto");
 	}
 	else if (StrEqual(sInfo, "Infected Suicide", false))
 	{
@@ -448,10 +496,15 @@ public void CreateInfectedProducts()
 	PSAPI_CreateProduct(-1, GetConVarFloat(PointsUmob), "Uncommon Mob", sDesc, "umob uncommonmob unmob ", "Uncommon Mob", 0.0, 1.0,
 	                    BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
 
+	FormatEx(sDesc, sizeof(sDesc), "Sends a mob that will contain %i Jimmy Gibbs CI", GetConVarInt(g_hCommonLimit));
+
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsJmob), "Jimmy Mob", sDesc, "jim jimmy jmob jimmies jimy jimi jym", "Jimmy Mob", 0.0, 1.0,
+	                    BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
+
 	PSAPI_CreateProduct(-1, GetConVarFloat(PointsSuicide), "Suicide", "Instantly kills you", "kill suicide die death", "Infected Suicide", 0.0, 0.0,
 	                    BUYFLAG_INFECTED | BUYFLAG_ALIVE | BUYFLAG_GHOST);
 
-	PSAPI_CreateProduct(-1, GetConVarFloat(PointsExtinguish), "Extinguish", NO_DESCRIPTION, "ext extinguish", "Infected Extinguish", 0.0, 0.0,
+	PSAPI_CreateProduct(-1, GetConVarFloat(PointsExtinguish), "Extinguish", NO_DESCRIPTION, "ext extinguish water", "Infected Extinguish", 0.0, 0.0,
 	                    BUYFLAG_INFECTED | BUYFLAG_ALIVE);
 }
 

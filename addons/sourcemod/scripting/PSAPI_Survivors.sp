@@ -12,6 +12,11 @@
 
 // float g_fNextBuyProduct[MAXPLAYERS + 1];
 
+char g_sLastTargetname[64];
+
+int g_iLastEquipFound = INVALID_ENT_REFERENCE;
+//float g_fLastEquipFoundTime;
+
 Handle PointsPistol    = INVALID_HANDLE;
 Handle PointsMagnum    = INVALID_HANDLE;
 Handle PointsSMG       = INVALID_HANDLE;
@@ -157,6 +162,12 @@ public void OnPluginStart()
 	}
 }
 
+public void OnMapStart()
+{
+	g_iLastEquipFound = INVALID_ENT_REFERENCE;
+	//g_fLastEquipFoundTime = 0.0;
+}
+
 public void OnClientPutInServer(int client)
 {
 	Func_OnClientPutInServer(client);
@@ -164,27 +175,45 @@ public void OnClientPutInServer(int client)
 
 public void Func_OnClientPutInServer(int client)
 {
+	SDKHook(client, SDKHook_WeaponEquipPost, SDKHook_OnWeaponEquipPost);
 	SDKHook(client, SDKHook_WeaponDropPost, SDKHook_OnWeaponDropPost);
 }
 
-public void SDKHook_OnWeaponDropPost(int client, int weapon)
+public void SDKHook_OnWeaponEquipPost(int client, int weapon)
+{
+	char sClassname[64];
+	GetEdictClassname(weapon, sClassname, sizeof(sClassname));
+
+	if (StrEqual(sClassname, "weapon_gascan") || StrEqual(sClassname, "weapon_oxygentank") 
+	|| StrEqual(sClassname, "weapon_fireworkcrate") || StrEqual(sClassname, "weapon_propanetank"))
+	{
+		g_iLastEquipFound = EntIndexToEntRef(weapon);
+
+		//g_fLastEquipFoundTime = GetGameTime();
+	}
+}
+
+public Action SDKHook_OnWeaponDropPost(int client, int weapon)
 {
 	if (weapon == -1 || !IsValidEdict(weapon))
-		return;
+		return Plugin_Continue;
 
 	char sClassname[64];
 	GetEdictClassname(weapon, sClassname, sizeof(sClassname));
 
-	if (!StrEqual(sClassname, "weapon_gascan"))
-		return;
+	if (!StrEqual(sClassname, "weapon_gascan") && !StrEqual(sClassname, "weapon_oxygentank") 
+	&& !StrEqual(sClassname, "weapon_fireworkcrate") && !StrEqual(sClassname, "weapon_propanetank"))
+		return Plugin_Continue;
 
 	char sTargetname[64];
 	GetEntPropString(weapon, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
 
 	if (strncmp(sTargetname, "PointSystemAPI", 14) != 0)
-		return;
+		return Plugin_Continue;
 
-	PSAPI_SetGasolineGlow(weapon);
+	ApplyGlowAndVulnerability(weapon);
+
+	return Plugin_Continue;
 }
 
 public void OnConfigsExecuted()
@@ -198,6 +227,17 @@ public void OnLibraryAdded(const char[] name)
 	{
 		CreateSurvivorProducts();
 	}
+}
+
+
+stock void ApplyGlowAndVulnerability(int weapon)
+{
+	if(HasEntProp(weapon, Prop_Data, "m_bVulnerableToSpit"))
+	{
+		SetEntProp(weapon, Prop_Data, "m_bVulnerableToSpit", 1);
+	}
+
+	PSAPI_SetGasolineGlow(weapon);
 }
 
 public Action L4D2_CGasCan_ShouldStartAction(int client, int gascan, int nozzle)
@@ -246,14 +286,16 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		strcopy(sClassname, sizeof(sClassname), sInfo);
 		ReplaceStringEx(sClassname, sizeof(sClassname), "give ", "weapon_");
 
-		if (StrEqual(sClassname, "gascan"))
+		if (StrEqual(sClassname, "weapon_gascan") || StrEqual(sClassname, "weapon_oxygentank") 
+		|| StrEqual(sClassname, "weapon_fireworkcrate") || StrEqual(sClassname, "weapon_propanetank"))
 		{
-			int iWeapon = CreateSpittableGascan(target);
+			int iWeapon = CreateSpittableObject(target, sClassname);
 
-			// 60 dictates time to delete this weapon if unowned.
-			SetEntPropString(iWeapon, Prop_Data, "m_iName", "PointSystemAPI 60");
+			if(iWeapon == -1)
+				return Plugin_Handled;
 
 			PSAPI_SetGasolineGlow(iWeapon);
+
 
 			return Plugin_Continue;
 		}
@@ -373,44 +415,63 @@ public void CreateSurvivorProducts()
 // -1 for do nothing, 0 for active search
 int g_iCheckEntity = -1;
 
-stock int CreateSpittableGascan(int client)
+stock int CreateSpittableObject(int client, const char[] sClassname)
 {
-	int iEnt = CreateEntityByName("weapon_scavenge_item_spawn");
+	int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+
+	if(weapon > 0 && IsValidEntity(weapon))
+	{
+		char sActiveWeaponClassname[32];
+		GetEntityClassname(weapon, sActiveWeaponClassname, sizeof(sActiveWeaponClassname));
+
+		if (/*StrEqual(sActiveWeaponClassname, "weapon_gascan") || */StrEqual(sActiveWeaponClassname, "weapon_oxygentank")
+		|| StrEqual(sActiveWeaponClassname, "weapon_fireworkcrate") || StrEqual(sActiveWeaponClassname, "weapon_propanetank"))
+		{
+			return -1;
+		}
+
+		SDKHooks_DropWeapon(client, weapon, _, _, true);
+	}
+
+	int iEnt = CreateEntityByName("prop_physics");
 
 	DispatchKeyValue(iEnt, "angles", "0 0 0");
 	DispatchKeyValue(iEnt, "body", "0");
 	DispatchKeyValue(iEnt, "disableshadows", "1");
 	DispatchKeyValue(iEnt, "glowstate", "3");
-	DispatchKeyValue(iEnt, "model", "models/props_junk/gascan001a.mdl");
+
+	if (StrEqual(sClassname, "weapon_gascan"))
+		DispatchKeyValue(iEnt, "model", "models/props_junk/gascan001a.mdl");
+
+	if (StrEqual(sClassname, "weapon_oxygentank"))
+		DispatchKeyValue(iEnt, "model", "models/props_equipment/oxygentank01.mdl");
+
+	if (StrEqual(sClassname, "weapon_fireworkcrate"))
+		DispatchKeyValue(iEnt, "model", "models/props_junk/explosive_box001.mdl");
+
+	if (StrEqual(sClassname, "weapon_propanetank"))
+		DispatchKeyValue(iEnt, "model", "models/props_junk/propanecanister001a.mdl");
+	
 	DispatchKeyValue(iEnt, "skin", "0");
 	DispatchKeyValue(iEnt, "solid", "0");
 	DispatchKeyValue(iEnt, "spawnflags", "2");
-	DispatchKeyValue(iEnt, "targetname", "scavenge_gascans_spawn");
+
+	DispatchKeyValue(iEnt, "targetname", "PointSystemAPI 60");
 	DispatchSpawn(iEnt);
 
+
 	float fOrigin[3];
-	GetEntPropVector(client, Prop_Data, "m_vecOrigin", fOrigin);
+	GetEntPropVector(client, Prop_Data, "m_vecAbsOrigin", fOrigin);
 
+	fOrigin[2] += 8.0;
 	TeleportEntity(iEnt, fOrigin, NULL_VECTOR, NULL_VECTOR);
+	
+	// Crashes server, need a better way to equip.
+	//EquipPlayerWeapon(client, iEnt);
 
-	g_iCheckEntity = 0;
-	AcceptEntityInput(iEnt, "SpawnItem");
+	AcceptEntityInput(iEnt, "Use", client);
 
-	AcceptEntityInput(iEnt, "Kill");
-
-	if (g_iCheckEntity == 0)
-		return -1;
-
-	int iWeapon    = g_iCheckEntity;
-	g_iCheckEntity = -1;
-
-	if (!IsValidEdict(iWeapon))
-		return -1;
-
-	SetEntProp(iWeapon, Prop_Send, "m_nSkin", 0);
-	EquipPlayerWeapon(client, iWeapon);
-
-	return iWeapon;
+	return iEnt;
 }
 
 stock int CreateMeleeWeapon(int client, const char[] sMeleeName)
@@ -436,17 +497,64 @@ stock int CreateMeleeWeapon(int client, const char[] sMeleeName)
 	char sClassname[64];
 	GetEdictClassname(iWeapon, sClassname, sizeof(sClassname));
 
-	// Before making the active search limiter, I sometimes got some instance entity instead of the katana.
-	// PrintToChatAll("Class: %s", sClassname);
-
 	// If you use EquipPlayerWeapon the server will crash :D
 	// EquipPlayerWeapon(client, iWeapon);
 
 	return iWeapon;
 }
 
+public void OnEntityDestroyed(int entity)
+{
+
+	char sClassname[64];
+	GetEdictClassname(entity, sClassname, sizeof(sClassname));
+
+	if (StrEqual(sClassname, "prop_physics") || StrEqual(sClassname, "weapon_gascan") || StrEqual(sClassname, "weapon_oxygentank") 
+		|| StrEqual(sClassname, "weapon_fireworkcrate") || StrEqual(sClassname, "weapon_propanetank"))
+	{
+		char sModel[PLATFORM_MAX_PATH];
+		GetEntPropString(entity, Prop_Data, "m_ModelName", sModel, sizeof(sModel));
+
+		if(StrEqual(sModel, "models/props_junk/gascan001a.mdl") || StrEqual(sModel, "models/props_equipment/oxygentank01.mdl")
+		||  StrEqual(sModel, "models/props_junk/explosive_box001.mdl") || StrEqual(sModel, "models/props_junk/propanecanister001a.mdl"))
+		{
+			char sTargetname[64];
+			GetEntPropString(entity, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
+
+			if(sTargetname[0] == EOS)
+			{
+				sTargetname = g_sLastTargetname;
+			}
+			if (strncmp(sTargetname, "PointSystemAPI", 14) == 0)
+			{
+				int prevEntity = EntRefToEntIndex(g_iLastEquipFound);
+
+				if(prevEntity != INVALID_ENT_REFERENCE)
+				{
+					g_sLastTargetname = sTargetname;
+
+					//g_fLastEquipFoundTime = GetGameTime();
+					
+					SetEntPropString(prevEntity, Prop_Data, "m_iName", sTargetname);
+					ApplyGlowAndVulnerability(prevEntity);
+				}
+
+				g_iLastEquipFound = INVALID_ENT_REFERENCE;
+				
+			}
+		}
+	}
+}
+
 public void OnEntityCreated(int entity, const char[] classname)
 {
+	if (StrEqual(classname, "prop_physics") || StrEqual(classname, "physics_prop") || StrEqual(classname, "weapon_gascan") || StrEqual(classname, "weapon_oxygentank") 
+		|| StrEqual(classname, "weapon_fireworkcrate") || StrEqual(classname, "weapon_propanetank"))
+	{
+
+		SDKHook(entity, SDKHook_SpawnPost, OnCarryObjectSpawnPost);
+	}
+
 	// Left4Dhooks may decide to create a logic_script if no other one exists.
 	if (StrEqual(classname, "logic_script"))
 		return;
@@ -455,6 +563,32 @@ public void OnEntityCreated(int entity, const char[] classname)
 		g_iCheckEntity = entity;
 }
 
+public void OnCarryObjectSpawnPost(int entity)
+{
+	char sModel[PLATFORM_MAX_PATH];
+	GetEntPropString(entity, Prop_Data, "m_ModelName", sModel, sizeof(sModel));
+
+	if(StrEqual(sModel, "models/props_junk/gascan001a.mdl") || StrEqual(sModel, "models/props_equipment/oxygentank01.mdl")
+	||  StrEqual(sModel, "models/props_junk/explosive_box001.mdl") || StrEqual(sModel, "models/props_junk/propanecanister001a.mdl"))
+	{
+	
+		char sTargetname[64];
+		GetEntPropString(entity, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
+
+		if(sTargetname[0] == EOS)
+		{
+			sTargetname = g_sLastTargetname;
+		}
+		if (strncmp(sTargetname, "PointSystemAPI", 14) == 0)
+		{
+				
+			g_iLastEquipFound = EntIndexToEntRef(entity);
+
+			//g_fLastEquipFoundTime = GetGameTime();
+			
+		}
+	}
+}
 stock void SetPlayerAlive(int client, bool alive)
 {
 	if (alive) SetEntProp(client, Prop_Data, "m_isAlive", alive);

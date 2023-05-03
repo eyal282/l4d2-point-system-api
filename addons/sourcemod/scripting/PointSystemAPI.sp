@@ -388,7 +388,11 @@ public Action Timer_Cleanup(Handle hTimer)
 
 	while ((iEntity = FindEntityByTargetname(iEntity, "PointSystemAPI", false, true)) != -1)
 	{
-		if (!HasEntProp(iEntity, Prop_Data, "m_hOwnerEntity") || GetEntPropEnt(iEntity, Prop_Data, "m_hOwnerEntity") != -1)
+		char sClassname[64];
+		GetEdictClassname(iEntity, sClassname, sizeof(sClassname));
+
+		// If this object has no owner capabilities, it's a prop_physics waiting to be found
+		if (!StrEqual(sClassname, "prop_physics") && HasEntProp(iEntity, Prop_Data, "m_hOwnerEntity") && GetEntPropEnt(iEntity, Prop_Data, "m_hOwnerEntity") != -1)
 			continue;
 
 		char sTargetname[64];
@@ -1134,9 +1138,9 @@ public Action Event_Protect(Handle event, const char[] name, bool dontBroadcast)
 		if (protectcount[client] == 6)
 		{
 			g_fPoints[client] += GetConVarFloat(SProtect);
+			if (GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Multiple Teammate Protection\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SProtect), GetClientPoints(client));
 			protectcount[client] = 0;
 		}
-		if (GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Protected Teammate\x05 + %d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SProtect), GetClientPoints(client));
 	}
 
 	return Plugin_Continue;
