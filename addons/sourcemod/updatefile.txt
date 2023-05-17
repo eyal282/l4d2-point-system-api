@@ -1,0 +1,16 @@
+"Information"
+{
+	"Version"
+	{
+		"Latest"	"1.0"
+	}
+	
+	"Notes"	"Updater Support"
+}
+	
+"Files"
+{
+	"Plugin"	"Path_SM/plugins/PointSystemAPI.smx"
+	
+	"Source"	"Path_SM/scripting/PointSystemAPI.sp"
+}
