@@ -505,7 +505,9 @@ stock int CreateMeleeWeapon(int client, const char[] sMeleeName)
 
 public void OnEntityDestroyed(int entity)
 {
-
+	if(!IsValidEdict(entity))
+		return;
+		
 	char sClassname[64];
 	GetEdictClassname(entity, sClassname, sizeof(sClassname));
 

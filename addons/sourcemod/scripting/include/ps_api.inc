@@ -108,6 +108,11 @@ you can basically help your bots, buying them products without disturbing any pl
 
 // Natives
 
+
+// Clone of list of products. Must be closed with delete.
+// Editing this array doesn't do anything. Go wild.
+native ArrayList PSAPI_GetProducts();
+
 // Sets global error for the forward you're inside. Highest priority number wins. Refunds and death buys have a priority of 50.
 // Returns Plugin_Handled always. This means you can return PSAPI_SetErrorByPriority as an easy method.
 // Using a negative priority will not set the error, so cvars that deal with priority have an easy way to delete the error.
@@ -183,6 +188,12 @@ native void PSAPI_AddTankHealCount(int client, int amount);
 
 // Forwards
 
+
+// team is the team relative to start points, and is NOT necessarily the team of client.
+// fAveragePrice is the average product price of the team.
+// You should utilize fAveragePrice to increase start points, as some servers may make start points as 0.
+forward void PointSystemAPI_OnSetStartPoints(int client, L4DTeam team, float &fStartPoints, float fAveragePrice);
+
 // product is a copyback value.
 // Return Plugin_Handled to prevent the product from creation.
 // Does not fire if a product is created with bNoHooks = true
@@ -233,6 +244,36 @@ forward Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] info, 
 
 
 // Stocks
+
+// This float is pretty much meant for RPG servers to increase starting points when the starting points default is 0.
+stock float PSAPI_GetAverageProductPrice(L4DTeam team)
+{
+	ArrayList aProducts = PSAPI_GetProducts();
+
+	int iProductsSize = aProducts.Length;
+
+	float fCount = 0.0;
+	float totalPrice = 0.0;
+
+	for (int i = 0; i < iProductsSize; i++)
+	{
+		enProduct product;
+		GetArrayArray(aProducts, i, product);
+
+		if(product.fCost <= 0.0)
+			continue;
+
+		if ((product.iBuyFlags & BUYFLAG_SURVIVOR && team == L4DTeam_Survivor) || (product.iBuyFlags & BUYFLAG_INFECTED && team == L4DTeam_Infected))
+		{
+			totalPrice = product.fCost;
+			fCount++;
+		}
+	}
+
+	delete aProducts;
+
+	return totalPrice / fCount;
+}
 
 stock int PSAPI_GetTeamHumansCount(L4DTeam team, bool bAliveOnly)
 {
