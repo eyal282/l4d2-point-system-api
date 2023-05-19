@@ -172,7 +172,7 @@ public void OnPluginStart()
 	AutoExecConfig_SetFile("PointSystemAPI");
 
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
-	BotPriceRatio	   = AutoExecConfig_CreateConVar("l4d2_points_bot_price_ratio", "1.0", "Price ratio when buying for bots. 1.0 = normal price. 2.0 = double price. 0.5 = half price.", _, true, 0.0, true, 1.0);
+	BotPriceRatio	   = AutoExecConfig_CreateConVar("l4d2_points_bot_price_ratio", "1.0", "Price ratio when buying for bots. 1.0 = normal price. 2.0 = double price. 0.5 = half price.", _, true, 0.0, true, 5.0);
 	RequestPoints	   = AutoExecConfig_CreateConVar("l4d2_points_request_points", "1", "Enable !rp command?");
 	DeadBuy            = AutoExecConfig_CreateConVar("l4d2_points_dead_buy", "1", "0 - You can't buy products as a dead survivor. 1 - You cannot buy products for other survivors as a dead survivor. 2 - You can buy products as a dead survivor.");
 	Notifications      = AutoExecConfig_CreateConVar("l4d2_points_notify", "1", "Show messages when points are earned?");
