@@ -15,9 +15,11 @@
 	"Plugin"	"Path_SM/plugins/[PSAPI]/PSAPI_Infected.smx"
 	"Plugin"	"Path_SM/plugins/[PSAPI]/PSAPI_WeaponUpgrades.smx"
 	"Plugin"	"Path_SM/plugins/[PSAPI]/PSAPI_FullHeal.smx"
+	"Plugin"	"Path_SM/plugins/[PSAPI]/PSAPI_AutoBuy.smx"
 	"Source"	"Path_SM/scripting/[PSAPI]/PointSystemAPI.sp"
 	"Source"	"Path_SM/scripting/[PSAPI]/PSAPI_Survivors.sp"
 	"Source"	"Path_SM/scripting/[PSAPI]/PSAPI_Infected.sp"
 	"Source"	"Path_SM/scripting/[PSAPI]/PSAPI_WeaponUpgrades.sp"
 	"Source"	"Path_SM/scripting/[PSAPI]/PSAPI_FullHeal.sp"
+	"Source"	"Path_SM/scripting/[PSAPI]/PSAPI_AutoBuy.sp"
 }
