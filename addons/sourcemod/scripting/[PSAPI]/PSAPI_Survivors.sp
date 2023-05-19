@@ -321,6 +321,10 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 public void CreateSurvivorProducts()
 {
+	// Prevents fail state of plugin.
+	if(!LibraryExists("PointSystemAPI"))
+		return;
+		
 	// Pistols
 	int iWeaponsCategory = PSAPI_CreateCategory(-1, "survivors weapons", "Weapons Menu", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED);
 

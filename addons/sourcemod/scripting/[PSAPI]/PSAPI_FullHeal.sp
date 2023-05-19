@@ -217,6 +217,10 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 public void CreateProducts()
 {
+	// Prevents fail state of plugin.
+	if(!LibraryExists("PointSystemAPI"))
+		return;
+
 	int iCategory = PSAPI_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED);
 
 	if (GetConVarFloat(g_hBoomerRatioCost) == GetConVarFloat(g_hSpitterRatioCost))

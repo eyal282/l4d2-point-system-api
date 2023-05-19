@@ -107,6 +107,10 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 public void CreateProducts()
 {
+	// Prevents fail state of plugin.
+	if(!LibraryExists("PointSystemAPI"))
+		return;
+		
 	int iCategory = PSAPI_CreateCategory(-1, "weapon upgrades", "Weapon Upgrades", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE);
 
 	PSAPI_CreateProduct(iCategory, GetConVarFloat(g_cvExplosiveAmmoCost), "Explosive Ammo", "Bullets stagger all Infected but the Tank", "ex exp exammo expammo", "upgrade_add 1", 0.0, 0.0,

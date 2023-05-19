@@ -453,6 +453,10 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 public void CreateInfectedProducts()
 {
+	// Prevents fail state of plugin.
+	if(!LibraryExists("PointSystemAPI"))
+		return;
+
 	char sInfo[256];
 
 	FormatEx(sInfo, sizeof(sInfo), "Special Infected Spawn - %iboomer", GetConVarInt(PointsBoomer) == CalculateGhostPrice() ? 0 : 1);
