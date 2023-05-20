@@ -107,6 +107,7 @@ Handle IKarma             = INVALID_HANDLE;
 
 Handle ResetPoints = INVALID_HANDLE;
 Handle StartPoints = INVALID_HANDLE;
+Handle BotPriceRatio = INVALID_HANDLE;
 Handle RequestPoints = INVALID_HANDLE;
 Handle DeadBuy     = INVALID_HANDLE;
 
@@ -171,6 +172,7 @@ public void OnPluginStart()
 	AutoExecConfig_SetFile("PointSystemAPI");
 
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
+	BotPriceRatio	   = AutoExecConfig_CreateConVar("l4d2_points_bot_price_ratio", "1.0", "Price ratio when buying for bots. 1.0 = normal price. 2.0 = double price. 0.5 = half price.", _, true, 0.0, true, 5.0);
 	RequestPoints	   = AutoExecConfig_CreateConVar("l4d2_points_request_points", "1", "Enable !rp command?");
 	DeadBuy            = AutoExecConfig_CreateConVar("l4d2_points_dead_buy", "1", "0 - You can't buy products as a dead survivor. 1 - You cannot buy products for other survivors as a dead survivor. 2 - You can buy products as a dead survivor.");
 	Notifications      = AutoExecConfig_CreateConVar("l4d2_points_notify", "1", "Show messages when points are earned?");
@@ -356,6 +358,17 @@ public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const cha
 
 		PrintToChat(attacker, "\x04[PS]\x01 %s %s'd!!! + \x05%d\x03 points (Σ: \x05%d\x03)", bBird ? "Bird" : "Karma", KarmaName, RoundToFloor(fPoints), GetClientPoints(attacker));
 	}
+}
+
+public Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAliases, char[] sInfo, char[] sName, char[] sDescription, int target, float& fCost, float& fDelay, float& fCooldown)
+{
+	if(GetConVarFloat(BotPriceRatio) != 1.0 && IsFakeClient(target))
+	{
+		fCost *= GetConVarFloat(BotPriceRatio);
+		return Plugin_Changed;
+	}
+
+	return Plugin_Continue;
 }
 
 public Action CheckMultipleDamage(Handle hTimer, any number)
