@@ -50,6 +50,13 @@ public void OnAllPluginsLoaded()
 	Func_OnAllPluginsLoaded();
 }
 
+public void OnLibraryAdded(const char[] name)
+{
+	if (StrEqual(name, "updater"))
+	{
+		Updater_AddPlugin(UPDATE_URL);
+	}
+}
 public void Func_OnAllPluginsLoaded()
 {
 	if (LibraryExists("updater"))
@@ -64,7 +71,6 @@ public void Func_OnAllPluginsLoaded()
 		}
 		else
 		{
-			Updater_AddPlugin(UPDATE_URL);
 			return;
 		}
 
