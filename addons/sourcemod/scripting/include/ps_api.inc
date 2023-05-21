@@ -194,7 +194,7 @@ native void PSAPI_AddTankHealCount(int client, int amount);
 // You should utilize fAveragePrice to increase start points, as some servers may make start points as 0.
 forward void PointSystemAPI_OnSetStartPoints(int client, L4DTeam team, float &fStartPoints, float fAveragePrice);
 
-forward void PointSystemAPI_OnGainPoints(int attacker, float &fPoints, const char[] reason);
+forward void PointSystemAPI_OnGainPoints(int client, float &fPoints, const char[] reason);
 
 // product is a copyback value.
 // Return Plugin_Handled to prevent the product from creation.
