@@ -267,7 +267,7 @@ stock float PSAPI_GetAverageProductPrice(L4DTeam team)
 
 		if ((product.iBuyFlags & BUYFLAG_SURVIVOR && team == L4DTeam_Survivor) || (product.iBuyFlags & BUYFLAG_INFECTED && team == L4DTeam_Infected))
 		{
-			totalPrice = product.fCost;
+			totalPrice += product.fCost;
 			fCount++;
 		}
 	}
@@ -356,7 +356,7 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct alt
 	
 	if(alteredProduct.fCost < 0.0)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Error: This product is disabled!", iBuyFlags & BUYFLAG_SURVIVOR ? "Survivors" : "Infected");
+		FormatEx(sError, iLength, "\x04[PS]\x03 Error: This product is disabled!");
 		bShouldReturn = true;
 		return true;
 	}

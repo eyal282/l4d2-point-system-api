@@ -49,7 +49,6 @@ char MapName[30];
 int  hurtcount[MAXPLAYERS + 1]     = { 0, ... };
 int  protectcount[MAXPLAYERS + 1]  = { 0, ... };
 int  tankburning[MAXPLAYERS + 1]   = { 0, ... };
-int  tankbiled[MAXPLAYERS + 1]     = { 0, ... };
 int  witchburning[MAXPLAYERS + 1]  = { 0, ... };
 int  killcount[MAXPLAYERS + 1]     = { 0, ... };
 int  headshotcount[MAXPLAYERS + 1] = { 0, ... };
@@ -844,7 +843,7 @@ public any Native_FullHeal(Handle plugin, int numParams)
 	return true;
 }
 
-public void OnClientAuthorized(int client, const char[] auth)
+public void OnClientPostAdminCheck(int client)
 {
 	NextMultipleDamage[client]    = 0.0;
 	NextSpitterDamage[client]     = 0.0;
@@ -852,10 +851,6 @@ public void OnClientAuthorized(int client, const char[] auth)
 	SpitterDamageStack[client]    = 0.0;
 	g_sLastBoughtAlias[client][0] = EOS;
 
-	if (g_fPoints[client] > GetConVarFloat(StartPoints)) return;
-	g_fPoints[client]              = GetConVarFloat(StartPoints);
-	g_fSavedSurvivorPoints[client] = GetConVarFloat(StartPoints);
-	g_fSavedInfectedPoints[client] = GetConVarFloat(StartPoints);
 	if (killcount[client] > 0) return;
 	killcount[client]     = 0;
 	hurtcount[client]     = 0;
@@ -870,6 +865,46 @@ public Action Event_ChangeTeam(Handle event, const char[] name, bool dontBroadca
 	int team    = GetEventInt(event, "team");
 	int oldteam = GetEventInt(event, "oldteam");
 
+	// Just joined the server.
+	if(oldteam == 0)
+	{
+		float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
+		float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
+
+		float fStartPoints = GetConVarFloat(StartPoints);
+
+		Call_StartForward(g_fwOnSetStartPoints);
+
+		Call_PushCell(client);
+		Call_PushCell(L4DTeam_Survivor);
+		
+		Call_PushFloatRef(fStartPoints);
+		Call_PushFloat(fAverageSurvivorsPrice);
+
+		Call_Finish();
+
+		if(g_fSavedSurvivorPoints[client] < fStartPoints)
+		{
+			g_fSavedSurvivorPoints[client] = fStartPoints;
+		}
+
+		fStartPoints = GetConVarFloat(StartPoints);
+
+		Call_StartForward(g_fwOnSetStartPoints);
+
+		Call_PushCell(client);
+		Call_PushCell(L4DTeam_Infected);
+		
+		Call_PushFloatRef(fStartPoints);
+		Call_PushFloat(fAverageInfectedPrice);
+
+		Call_Finish();
+
+		if(g_fSavedInfectedPoints[client] < fStartPoints)
+		{
+			g_fSavedInfectedPoints[client] = fStartPoints;
+		}
+	}
 	if (oldteam == 2)
 		g_fSavedSurvivorPoints[client] = g_fPoints[client];
 
@@ -987,8 +1022,7 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 			float fStartPoints = GetConVarFloat(StartPoints);
 
 			if(IsClientInGame(i) && !IsFakeClient(i))
-			{
-				
+			{			
 				Call_StartForward(g_fwOnSetStartPoints);
 
 				Call_PushCell(i);
@@ -1012,6 +1046,8 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 				Call_PushFloat(fAverageInfectedPrice);
 
 				Call_Finish();
+
+				g_fSavedInfectedPoints[i] = fStartPoints;
 
 				if(L4D_GetClientTeam(i) == L4DTeam_Survivor)
 				{
@@ -1047,9 +1083,59 @@ public Action Event_Finale(Handle event, char[] event_name, bool dontBroadcast)
 	char gamemode[40];
 	GetConVarString(FindConVar("mp_gamemode"), gamemode, sizeof(gamemode));
 	if (StrEqual(gamemode, "versus", false) || StrEqual(gamemode, "teamversus", false)) return Plugin_Continue;
+
+	float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
+	float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
+
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		g_fPoints[i]     = GetConVarFloat(StartPoints);
+		// Redeclaring outside the loop can cause a player to alter the start points of all other players.
+		float fStartPoints = GetConVarFloat(StartPoints);
+
+		if(IsClientInGame(i) && !IsFakeClient(i))
+		{			
+			Call_StartForward(g_fwOnSetStartPoints);
+
+			Call_PushCell(i);
+			Call_PushCell(L4DTeam_Survivor);
+			
+			Call_PushFloatRef(fStartPoints);
+			Call_PushFloat(fAverageSurvivorsPrice);
+
+			Call_Finish();
+
+			g_fSavedSurvivorPoints[i] = fStartPoints;
+
+			fStartPoints = GetConVarFloat(StartPoints);
+
+			Call_StartForward(g_fwOnSetStartPoints);
+
+			Call_PushCell(i);
+			Call_PushCell(L4DTeam_Infected);
+			
+			Call_PushFloatRef(fStartPoints);
+			Call_PushFloat(fAverageInfectedPrice);
+
+			Call_Finish();
+
+			if(L4D_GetClientTeam(i) == L4DTeam_Survivor)
+			{
+				g_fPoints[i]              = g_fSavedSurvivorPoints[i];
+			}
+			else if(L4D_GetClientTeam(i) == L4DTeam_Infected)
+			{
+				g_fPoints[i]              = g_fSavedInfectedPoints[i];
+			}
+
+			PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%.0f", g_fPoints[i]);
+		}
+		else
+		{
+			g_fSavedSurvivorPoints[i] = fStartPoints;
+			g_fPoints[i]              = fStartPoints;
+			g_fSavedInfectedPoints[i] = fStartPoints;
+		}
+
 		killcount[i]     = 0;
 		hurtcount[i]     = 0;
 		protectcount[i]  = 0;
@@ -1168,13 +1254,12 @@ public Action Event_TankDeath(Handle event, const char[] name, bool dontBroadcas
 		if (IsClientInGame(i) && !IsFakeClient(i) && IsPlayerAlive(i) && GetClientTeam(i) == 2 && GetConVarInt(STankKill) > 0 && GetConVarInt(Enable) == 1 && IsAllowedGameMode())
 		{
 			float fPoints = GetConVarFloat(STankKill);
-			CalculatePointsGain(attacker, fPoints, "Killed Tank");
-			g_fPoints[attacker] += fPoints;
+			CalculatePointsGain(i, fPoints, "Killed Tank");
+			g_fPoints[i] += fPoints;
 			if (GetConVarBool(Notifications)) PrintToChat(i, "\x04[PS]\x03 Killed Tank \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(i));
 		}
 	}
 	tankburning[attacker] = 0;
-	tankbiled[attacker]   = 0;
 
 	return Plugin_Continue;
 }
@@ -1334,7 +1419,6 @@ public Action Event_Boom(Handle event, const char[] name, bool dontBroadcast)
 			CalculatePointsGain(attacker, fPoints, "Biled Tank");
 			g_fPoints[attacker] += fPoints;
 			if (GetClientTeam(client) == 3 && GetEntProp(client, Prop_Send, "m_zombieClass") == 8 && GetConVarBool(Notifications)) PrintToChat(attacker, "\x04[PS]\x03 Biled Tank + \x05%d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(attacker));
-			tankbiled[attacker] = 1;
 		}
 	}
 
