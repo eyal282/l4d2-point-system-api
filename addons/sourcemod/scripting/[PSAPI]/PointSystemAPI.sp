@@ -1284,7 +1284,7 @@ public Action Event_WitchDeath(Handle event, const char[] name, bool dontBroadca
 			float fPoints = GetConVarFloat(SWitchKill);
 			CalculatePointsGain(client, fPoints, "Killed Witch");
 			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Killed Witch + \x05%d\x03 points", GetConVarInt(SWitchKill), GetClientPoints(client));
+			if (GetConVarBool(Notifications)) PrintToChat(client, "\x04[PS]\x03 Killed Witch + \x05%d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SWitchKill), GetClientPoints(client));
 		}
 	}
 	witchburning[client] = 0;
