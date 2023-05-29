@@ -1011,11 +1011,11 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 	if (!IsModelPrecached("models/w_models/weapons/w_m60.mdl")) PrecacheModel("models/w_models/weapons/w_m60.mdl");
 	if (!IsModelPrecached("models/v_models/v_m60.mdl")) PrecacheModel("models/v_models/v_m60.mdl");
 
+	float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
+	float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
+
 	if (IsAllowedReset())
 	{
-		float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
-		float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
-
 		for (int i = 1; i <= MaxClients; i++)
 		{
 			// Redeclaring outside the loop can cause a player to alter the start points of all other players.
@@ -1058,6 +1058,7 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 					g_fPoints[i]              = g_fSavedInfectedPoints[i];
 				}
 
+				
 				PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%.0f", g_fPoints[i]);
 			}
 			else
@@ -1066,6 +1067,64 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 				g_fPoints[i]              = fStartPoints;
 				g_fSavedInfectedPoints[i] = fStartPoints;
 			}
+			hurtcount[i]              = 0;
+			protectcount[i]           = 0;
+			headshotcount[i]          = 0;
+			killcount[i]              = 0;
+		}
+	}
+	// Don't reset but give starting points if people have 0
+	else
+	{
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			// Redeclaring outside the loop can cause a player to alter the start points of all other players.
+			float fStartPoints = GetConVarFloat(StartPoints);
+
+			if(IsClientInGame(i) && !IsFakeClient(i))
+			{			
+				if(L4D_GetClientTeam(i) == L4DTeam_Survivor)
+				{
+					Call_StartForward(g_fwOnSetStartPoints);
+
+					Call_PushCell(i);
+					Call_PushCell(L4DTeam_Survivor);
+					
+					Call_PushFloatRef(fStartPoints);
+					Call_PushFloat(fAverageSurvivorsPrice);
+
+					Call_Finish();
+
+					if(g_fPoints[i] < fStartPoints)
+					{
+						g_fPoints[i] = fStartPoints;
+						PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%.4f", g_fPoints[i]);
+					}
+				}
+				else if(L4D_GetClientTeam(i) == L4DTeam_Infected)
+				{
+
+					fStartPoints = GetConVarFloat(StartPoints);
+
+					Call_StartForward(g_fwOnSetStartPoints);
+
+					Call_PushCell(i);
+					Call_PushCell(L4DTeam_Infected);
+					
+					Call_PushFloatRef(fStartPoints);
+					Call_PushFloat(fAverageInfectedPrice);
+
+					Call_Finish();
+
+					if(g_fPoints[i] < fStartPoints)
+					{
+						g_fPoints[i] = fStartPoints;
+						PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%.0f", g_fPoints[i]);
+					}
+
+				}
+			}
+			
 			hurtcount[i]              = 0;
 			protectcount[i]           = 0;
 			headshotcount[i]          = 0;
