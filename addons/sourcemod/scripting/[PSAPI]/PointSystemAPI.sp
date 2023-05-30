@@ -1059,7 +1059,7 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 				}
 
 				
-				PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%.0f", g_fPoints[i]);
+				PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%i", GetClientPoints(i));
 			}
 			else
 			{
@@ -1098,7 +1098,7 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 					if(g_fPoints[i] < fStartPoints)
 					{
 						g_fPoints[i] = fStartPoints;
-						PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%.4f", g_fPoints[i]);
+						PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%i", GetClientPoints(i));
 					}
 				}
 				else if(L4D_GetClientTeam(i) == L4DTeam_Infected)
@@ -1119,7 +1119,7 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 					if(g_fPoints[i] < fStartPoints)
 					{
 						g_fPoints[i] = fStartPoints;
-						PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%.0f", g_fPoints[i]);
+						PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%i", GetClientPoints(i));
 					}
 
 				}
@@ -1186,7 +1186,7 @@ public Action Event_Finale(Handle event, char[] event_name, bool dontBroadcast)
 				g_fPoints[i]              = g_fSavedInfectedPoints[i];
 			}
 
-			PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%.0f", g_fPoints[i]);
+			PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%i", GetClientPoints(i));
 		}
 		else
 		{
