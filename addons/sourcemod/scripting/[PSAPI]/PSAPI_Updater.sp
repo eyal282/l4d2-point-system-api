@@ -1,10 +1,7 @@
+
 #include <sourcemod>
 
-#undef REQUIRE_PLUGIN
-#undef REQUIRE_EXTENSIONS
-#tryinclude < updater>    // Comment out this line to remove updater support by force.
-#define REQUIRE_PLUGIN
-#define REQUIRE_EXTENSIONS
+#include <updater>
 
 // Only one update URL can be active at once. Start with left4dhooks then PointSystemAPI.
 #define UPDATE_URL "https://raw.githubusercontent.com/eyal282/l4d2-point-system-api/master/addons/sourcemod/updatefile.txt"
@@ -22,6 +19,12 @@ public Plugin myinfo =
 	url         = ""
 };
 
+Handle g_Timer;
+
+public void OnMapStart()
+{
+	g_Timer = INVALID_HANDLE;
+}
 public void OnPluginStart()
 {
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
@@ -33,7 +36,7 @@ public Action Event_PlayerSpawn(Handle hEvent, const char[] Name, bool dontBroad
 
 	return Plugin_Continue;
 }
-
+			
 public void Updater_OnPluginUpdated()
 {
 	if(!LibraryExists("PointSystemAPI") || !LibraryExists("left4dhooks"))
@@ -45,28 +48,18 @@ public void Updater_OnPluginUpdated()
 	}
 }
 
-public void OnAllPluginsLoaded()
-{
-	Func_OnAllPluginsLoaded();
-}
-
-public void OnLibraryAdded(const char[] name)
-{
-	if (StrEqual(name, "updater"))
-	{
-		Updater_AddPlugin(UPDATE_URL);
-	}
-}
 public void Func_OnAllPluginsLoaded()
 {
 	if (LibraryExists("updater"))
 	{
 		if(!LibraryExists("left4dhooks"))
 		{
+			Updater_RemovePlugin();
 			Updater_AddPlugin(UPDATE_URL2);
 		}
 		else if(!LibraryExists("PointSystemAPI"))
 		{
+			Updater_RemovePlugin();
 			Updater_AddPlugin(UPDATE_URL);
 		}
 		else
@@ -74,13 +67,20 @@ public void Func_OnAllPluginsLoaded()
 			return;
 		}
 
-		CreateTimer(5.0, Timer_ForceUpdate);
+		if(g_Timer != INVALID_HANDLE)
+		{
+			delete g_Timer;
+		}
+
+		g_Timer = CreateTimer(5.0, Timer_ForceUpdate, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 }
 
 public Action Timer_ForceUpdate(Handle hTimer)
 {
+
 	Updater_ForceUpdate();
 
-	return Plugin_Continue;
+	g_Timer = INVALID_HANDLE;
+	return Plugin_Stop;
 }
