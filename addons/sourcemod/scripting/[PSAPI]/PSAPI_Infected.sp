@@ -34,6 +34,7 @@ Handle PointsJmob              = INVALID_HANDLE;
 Handle PointsPermanentUmob              = INVALID_HANDLE;
 Handle PointsTerrorPerWitch    = INVALID_HANDLE;
 Handle WitchLimit              = INVALID_HANDLE;
+Handle TankLimit              = INVALID_HANDLE;
 
 char g_sUncommonModels[][] = {
 	"models/infected/common_male_riot.mdl",
@@ -63,7 +64,7 @@ public void OnPluginStart()
 	PointsSuicide           = AutoExecConfig_CreateConVar("l4d2_points_suicide", "4", "How many points does suicide cost");
 	PointsExtinguish        = AutoExecConfig_CreateConVar("l4d2_points_extinguish", "-1", "How many points does extinguish cost");
 	PointsExtinguishTank    = AutoExecConfig_CreateConVar("l4d2_points_extinguish_tank", "-1", "How many points does tank extinguish cost? Or -1 to disable");
-	PointsMinInstantRespawn = AutoExecConfig_CreateConVar("l4d2_points_min_players_instant_respawn", "4", "If there are x or less human infected players, you instantly respawn by buying.", _, true, 0.0, true, float(MAXPLAYERS));
+	PointsMinInstantRespawn = AutoExecConfig_CreateConVar("l4d2_points_min_players_instant_respawn", "4", "If there are x or less human infected players, you instantly respawn by buying Ghost Spawn.", _, true, 0.0, true, float(MAXPLAYERS));
 	PointsHunter            = AutoExecConfig_CreateConVar("l4d2_points_hunter", "4", "How many points does a hunter cost");
 	PointsJockey            = AutoExecConfig_CreateConVar("l4d2_points_jockey", "6", "How many points does a jockey cost");
 	PointsSmoker            = AutoExecConfig_CreateConVar("l4d2_points_smoker", "4", "How many points does a smoker cost");
@@ -77,7 +78,8 @@ public void OnPluginStart()
 	PointsJmob              = AutoExecConfig_CreateConVar("l4d2_points_jmob", "-1", "How many points does a jimmy mob cost ( this can crash your server )");
 	PointsPermanentUmob     = AutoExecConfig_CreateConVar("l4d2_points_permanent_umob", "-1", "How many points does a permanent uncommon mob cost");
 	PointsTerrorPerWitch    = AutoExecConfig_CreateConVar("l4d2_points_terror_per_witch", "10", "How many points does a terror cost per witch");
-	WitchLimit              = AutoExecConfig_CreateConVar("l4d2_points_witch_limiter", "10", "Maximum amount of witches");
+	WitchLimit              = AutoExecConfig_CreateConVar("l4d2_points_witch_limiter", "10", "Maximum amount of alive witches");
+	TankLimit              = AutoExecConfig_CreateConVar("l4d2_points_tank_limiter", "1", "Maximum amount of alive tanks");
 
 	HookEvent("round_start", Event_RoundStart, EventHookMode_Post);
 
@@ -317,6 +319,38 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 		}
 	}
 
+	char sClassname[64];
+	strcopy(sClassname, sizeof(sClassname), sInfo);
+
+	if (ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 1", "") == -1)
+		ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 0", "");
+
+	if(StrEqual(sClassname, "Tank", false))
+	{
+		int tankCount = 0;
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (!IsClientInGame(i))
+				continue;
+
+			else if (GetClientTeam(i) != view_as<int>(L4DTeam_Infected))
+				continue;
+
+			else if(!IsPlayerAlive(i))
+				continue;
+
+			else if(L4D2_GetPlayerZombieClass(i) != L4D2ZombieClass_Tank)
+				continue;
+
+			tankCount++;
+		}
+
+		if(tankCount >= GetConVarInt(TankLimit))
+		{
+			PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Maximum living Tank limit reached\x04 (\x03%i\x04)", GetConVarInt(TankLimit));
+			return Plugin_Handled;
+		}
+	}
 	if (strncmp(sInfo, "Special Infected Spawn - ", 25) == 0 || StrEqual(sInfo, "Special Infected Ghost Spawn", false))
 	{
 		PSAPI_RefundProducts("boomer spitter smoker hunter charger jockey ghost", buyer, target);
@@ -330,6 +364,38 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 // Return Plugin_Handled to refund.
 public Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fTimeleft)
 {
+		char sClassname[64];
+	strcopy(sClassname, sizeof(sClassname), sInfo);
+
+	if (ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 1", "") == -1)
+		ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 0", "");
+
+	if(StrEqual(sClassname, "Tank", false))
+	{
+		int tankCount = 0;
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (!IsClientInGame(i))
+				continue;
+
+			else if (GetClientTeam(i) != view_as<int>(L4DTeam_Infected))
+				continue;
+
+			else if(!IsPlayerAlive(i))
+				continue;
+
+			else if(L4D2_GetPlayerZombieClass(i) != L4D2ZombieClass_Tank)
+				continue;
+
+			tankCount++;
+		}
+
+		if(tankCount >= GetConVarInt(TankLimit))
+		{
+			return Plugin_Handled;
+		}
+	}
+
 	if (strncmp(sInfo, "Special Infected Spawn - ", 25) == 0 || StrEqual(sInfo, "Special Infected Ghost Spawn", false))
 	{
 		if (IsPlayerAlive(buyer))

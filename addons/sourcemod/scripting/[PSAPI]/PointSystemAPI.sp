@@ -176,7 +176,7 @@ public void OnPluginStart()
 	DeadBuy            = AutoExecConfig_CreateConVar("l4d2_points_dead_buy", "1", "0 - You can't buy products as a dead survivor. 1 - You cannot buy products for other survivors as a dead survivor. 2 - You can buy products as a dead survivor.");
 	Notifications      = AutoExecConfig_CreateConVar("l4d2_points_notify", "1", "Show messages when points are earned?");
 	Enable             = AutoExecConfig_CreateConVar("l4d2_points_enable", "1", "Enable Point System?");
-	Modes              = AutoExecConfig_CreateConVar("l4d2_points_modes", "coop,realism,versus,teamversus", "Which game modes to use Point System");
+	Modes              = AutoExecConfig_CreateConVar("l4d2_points_modes", "coop,realism,versus,teamversus,survival", "Which game modes to use Point System");
 	ResetPoints        = AutoExecConfig_CreateConVar("l4d2_points_reset_mapchange", "versus,teamversus", "Which game modes to reset point count on round end and round start");
 	SValueKillingSpree = AutoExecConfig_CreateConVar("l4d2_points_cikill_value", "2", "How many points does killing a certain amount of infected earn");
 	SNumberKill        = AutoExecConfig_CreateConVar("l4d2_points_cikills", "25", "How many kills you need to earn a killing spree bounty");
