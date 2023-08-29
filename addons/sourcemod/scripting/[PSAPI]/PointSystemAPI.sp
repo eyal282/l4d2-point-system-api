@@ -254,7 +254,7 @@ public void OnPluginStart()
 	HookEvent("infected_death", Event_Kill, EventHookMode_Pre);
 	HookEvent("player_incapacitated", Event_Incap);
 	HookEvent("player_death", Event_Death);
-	HookEvent("tank_killed", Event_TankDeath, EventHookMode_Pre);
+	HookEvent("tank_killed", Event_TankDeath);
 	HookEvent("witch_killed", Event_WitchDeath);
 	HookEvent("heal_success", Event_Heal);
 	HookEvent("award_earned", Event_Protect);
