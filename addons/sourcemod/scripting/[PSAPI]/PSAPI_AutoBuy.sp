@@ -459,7 +459,13 @@ stock void RestoreSettings(int client)
 
 	if(sValue[0] == EOS)
 	{
-		SetClientCookie(client, settings, "0 1 1 0 0");
+		float fCost = PSAPI_FetchProductCostByAlias("heal", client, client);
+
+		if(fCost >= 50)
+			SetClientCookie(client, settings, "0 1 1 0 0");
+
+		else
+			SetClientCookie(client, settings, "0 0 0 0 0");
 
 		RestoreSettings(client);
 
