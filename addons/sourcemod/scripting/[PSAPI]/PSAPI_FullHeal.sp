@@ -184,20 +184,18 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 			if(L4D_IsPlayerIncapacitated(target))
 				oldHP = 0;
-				
+
 			PSAPI_FullHeal(target);
 
 			if(g_hHealOriginal.BoolValue)
 			{
 				if(!L4D_IsPlayerIncapacitated(target))
 				{
-					if(oldHP > 100)
+					SetEntityHealth(target, oldHP + 100);
+
+					if(GetEntityHealth(target) > GetEntityMaxHealth(target))
 					{
-						SetEntityHealth(target, oldHP + 100);	
-					}
-					else
-					{
-						SetEntityHealth(target, 100);
+						SetEntityHealth(target, GetEntityMaxHealth(target));
 					}
 				}
 			}
@@ -236,13 +234,11 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 			{
 				if(!L4D_IsPlayerIncapacitated(target))
 				{
-					if(oldHP >= 100)
+					SetEntityHealth(target, oldHP + 100);
+
+					if(GetEntityHealth(target) > GetEntityMaxHealth(target))
 					{
-						SetEntityHealth(target, oldHP + 100);	
-					}
-					else
-					{
-						SetEntityHealth(target, 100);
+						SetEntityHealth(target, GetEntityMaxHealth(target));
 					}
 				}
 			}
@@ -334,4 +330,9 @@ stock bool IsEntityPlayer(int entity)
 		return false;
 
 	return true;
+}
+
+stock int GetEntityMaxHealth(int entity)
+{
+	return GetEntProp(entity, Prop_Data, "m_iMaxHealth");
 }
