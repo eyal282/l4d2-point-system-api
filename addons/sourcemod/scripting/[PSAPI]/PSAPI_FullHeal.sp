@@ -21,6 +21,7 @@ public Plugin myinfo =
 
 int g_iTankHealsBought[MAXPLAYERS] = { 0, ... };
 
+ConVar g_hHealOriginal;
 ConVar g_hHealCost;
 ConVar g_hBoomerRatioCost;
 ConVar g_hSpitterRatioCost;
@@ -35,6 +36,7 @@ public void OnPluginStart()
 
 	AutoExecConfig_SetFile("PointSystemAPI_FullHeal");
 
+	g_hHealOriginal         = AutoExecConfig_CreateConVar("l4d2_points_full_heal_original", "1", "0 - Heal to max HP. 1 - Heal to 100 HP");
 	g_hHealCost         = AutoExecConfig_CreateConVar("l4d2_points_full_heal", "15", "How many points a complete heal costs");
 	g_hBoomerRatioCost  = AutoExecConfig_CreateConVar("l4d2_points_full_heal_boomer_ratio_cost", "0.5", "Ratio of cost for boomers");
 	g_hSpitterRatioCost = AutoExecConfig_CreateConVar("l4d2_points_full_heal_spitter_ratio_cost", "0.5", "Ratio of cost for spitters");
@@ -177,7 +179,29 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 	if (StrEqual(sInfo, "Full Heal"))
 	{
 		if (GetClientTeam(target) == view_as<int>(L4DTeam_Survivor) || L4D2_GetPlayerZombieClass(target) != L4D2ZombieClass_Tank)
+		{
+			int oldHP = GetEntityHealth(target);
+
+			if(L4D_IsPlayerIncapacitated(target))
+				oldHP = 0;
+				
 			PSAPI_FullHeal(target);
+
+			if(g_hHealOriginal.BoolValue)
+			{
+				if(!L4D_IsPlayerIncapacitated(target))
+				{
+					if(oldHP > 100)
+					{
+						SetEntityHealth(target, oldHP + 100);	
+					}
+					else
+					{
+						SetEntityHealth(target, 100);
+					}
+				}
+			}
+		}
 
 		else
 		{
@@ -200,7 +224,29 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 	else if (StrEqual(sInfo, "Partial Heal"))
 	{
 		if (GetClientTeam(target) == view_as<int>(L4DTeam_Survivor) || L4D2_GetPlayerZombieClass(target) != L4D2ZombieClass_Tank)
+		{
+			int oldHP = GetEntityHealth(target);
+
+			if(L4D_IsPlayerIncapacitated(target))
+				oldHP = 0;
+
 			PSAPI_FullHeal(target);
+
+			if(g_hHealOriginal.BoolValue)
+			{
+				if(!L4D_IsPlayerIncapacitated(target))
+				{
+					if(oldHP >= 100)
+					{
+						SetEntityHealth(target, oldHP + 100);	
+					}
+					else
+					{
+						SetEntityHealth(target, 100);
+					}
+				}
+			}
+		}
 
 		else
 		{
