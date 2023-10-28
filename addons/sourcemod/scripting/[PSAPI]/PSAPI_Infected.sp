@@ -364,7 +364,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 // Return Plugin_Handled to refund.
 public Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fTimeleft)
 {
-		char sClassname[64];
+	char sClassname[64];
 	strcopy(sClassname, sizeof(sClassname), sInfo);
 
 	if (ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 1", "") == -1)

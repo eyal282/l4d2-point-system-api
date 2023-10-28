@@ -187,7 +187,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 			PSAPI_FullHeal(target);
 
-			if(g_hHealOriginal.BoolValue)
+			if(g_hHealOriginal.BoolValue && L4D_GetClientTeam(target) == L4DTeam_Survivor)
 			{
 				if(!L4D_IsPlayerIncapacitated(target))
 				{
@@ -230,7 +230,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 			PSAPI_FullHeal(target);
 
-			if(g_hHealOriginal.BoolValue)
+			if(g_hHealOriginal.BoolValue && L4D_GetClientTeam(target) == L4DTeam_Survivor)
 			{
 				if(!L4D_IsPlayerIncapacitated(target))
 				{
