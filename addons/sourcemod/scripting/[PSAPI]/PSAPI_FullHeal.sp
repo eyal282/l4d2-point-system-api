@@ -182,7 +182,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		{
 			int oldHP = GetEntityHealth(target);
 
-			if(L4D_IsPlayerIncapacitated(target))
+			if(L4D_IsPlayerIncapacitated(target) || oldHP < 0)
 				oldHP = 0;
 
 			PSAPI_FullHeal(target);
@@ -225,7 +225,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		{
 			int oldHP = GetEntityHealth(target);
 
-			if(L4D_IsPlayerIncapacitated(target))
+			if(L4D_IsPlayerIncapacitated(target) || oldHP < 0)
 				oldHP = 0;
 
 			PSAPI_FullHeal(target);
