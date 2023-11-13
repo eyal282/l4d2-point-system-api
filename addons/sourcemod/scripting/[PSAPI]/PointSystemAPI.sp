@@ -186,7 +186,7 @@ public void OnPluginStart()
 	ISprayAlias			= AutoExecConfig_CreateConVar("l4d2_points_infected_spray_alias", "", "buy alias when infected players use spray button.\nThis disables spray for infected players.\nSet empty to disable");
 	SSprayAlias			= AutoExecConfig_CreateConVar("l4d2_points_survivor_spray_alias", "", "buy alias when survivor players use spray button.\nThis disables spray for survivor players.\nSet empty to disable");
 	IFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_infected_flashlight_alias", "umob", "buy alias when infected players use spray button.\nSet empty to disable");
-	SFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_survivor_flashlight_alias", "", "buy alias when infected players use spray button.\nThis disables flashlight for survivor players.\nSet empty to disable");
+	SFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_survivor_flashlight_alias", "lc", "buy alias when infected players use spray button.\nThis disables flashlight for survivor players.\nSet empty to disable");
 
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
 	BotPriceRatio	   = AutoExecConfig_CreateConVar("l4d2_points_bot_price_ratio", "1.0", "Price ratio when buying for bots. 1.0 = normal price. 2.0 = double price. 0.5 = half price.", _, true, 0.0, true, 5.0);
@@ -236,7 +236,6 @@ public void OnPluginStart()
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
 
-	AddCommandListener(Listener_Impulse, "impulse");
 	AddCommandListener(Listener_Say, "say");
 	AddCommandListener(Listener_Say, "say_team");
 
@@ -1712,12 +1711,30 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 {
 	if(buttons & IN_RELOAD)
 	{
-		if (!(g_iLastButtons[client] & IN_RELOAD))
+		if(!(g_iLastButtons[client] & IN_RELOAD))
 		{
 			OnReloadButtonPressed(client);
 		}
 	}
 
+	if(impulse == 201)
+	{
+		if(OnSprayButtonPressed(client))
+		{
+			impulse = 0;
+			return Plugin_Changed;
+		}
+	}
+
+	if(impulse == 100)
+	{
+		if(OnFlashlightButtonPressed(client))
+		{
+			impulse = 0;
+			return Plugin_Changed;
+		}
+	}
+	
 	g_iLastButtons[client] = buttons;
 
 	return Plugin_Continue;
@@ -1743,45 +1760,34 @@ public void OnReloadButtonPressed(int client)
 	HandleBuyBind(client, sAlias);
 }
 
-public Action Listener_Impulse(int client, char[] sArg, int args)
+public bool OnSprayButtonPressed(int client)
 {
-	char sFirstArg[8];
-	GetCmdArg(1, sFirstArg, sizeof(sFirstArg));
-
-	if(StringToInt(sFirstArg) == 100)
+	char sAlias[32];
+	switch(L4D_GetClientTeam(client))
 	{
-		char sAlias[32];
-		switch(L4D_GetClientTeam(client))
-		{
-			case L4DTeam_Infected: IFlashlightAlias.GetString(sAlias, sizeof(sAlias));
-			case L4DTeam_Survivor: SFlashlightAlias.GetString(sAlias, sizeof(sAlias));
-		}
-
-		if(sAlias[0] == EOS)
-			return Plugin_Continue;
-
-		HandleBuyBind(client, sAlias);
-
-		return Plugin_Continue;
+		case L4DTeam_Infected: ISprayAlias.GetString(sAlias, sizeof(sAlias));
+		case L4DTeam_Survivor: SSprayAlias.GetString(sAlias, sizeof(sAlias));
 	}
-	if(StringToInt(sFirstArg) == 201)
-	{
-		char sAlias[32];
-		switch(L4D_GetClientTeam(client))
-		{
-			case L4DTeam_Infected: ISprayAlias.GetString(sAlias, sizeof(sAlias));
-			case L4DTeam_Survivor: SSprayAlias.GetString(sAlias, sizeof(sAlias));
-		}
+	if(sAlias[0] == EOS)
+		return false;
 
-		if(sAlias[0] == EOS)
-			return Plugin_Continue;
-
-		HandleBuyBind(client, sAlias);
-
-		return Plugin_Continue;
-	}
-	return Plugin_Continue;
+	return HandleBuyBind(client, sAlias);
 }
+
+public bool OnFlashlightButtonPressed(int client)
+{
+	char sAlias[32];
+	switch(L4D_GetClientTeam(client))
+	{
+		case L4DTeam_Infected: IFlashlightAlias.GetString(sAlias, sizeof(sAlias));
+		case L4DTeam_Survivor: SFlashlightAlias.GetString(sAlias, sizeof(sAlias));
+	}
+	if(sAlias[0] == EOS)
+		return false;
+
+	return HandleBuyBind(client, sAlias);
+}
+
 public Action Command_PointSystem(int client, int args)
 {
 	PrintToChat(client, "\x04[PS]\x03 Use\x04 sm_buy <alias> [target]\x03 to buy products.");
@@ -4009,10 +4015,13 @@ stock void CalculatePointsGain(int attacker, float &fPoints, const char[] reason
 	Call_Finish();
 }
 
-stock void HandleBuyBind(int client, const char[] sAlias)
+stock bool HandleBuyBind(int client, const char[] sAlias)
 {
 	if (PSAPI_CanProductBeBought(sAlias, client, client) || PSAPI_CanProductBeBought(sAlias, client, 0))
 	{
 		FakeClientCommand(client, "sm_buy %s", sAlias);
+		return true;
 	}
+
+	return false;
 }
