@@ -184,7 +184,7 @@ public void OnPluginStart()
 	IReloadAlias        = AutoExecConfig_CreateConVar("l4d2_points_infected_reload_alias", "fheal", "buy alias when infected players use RELOAD.\nSet empty to disable");
 	SReloadAlias        = AutoExecConfig_CreateConVar("l4d2_points_survivor_reload_alias", "fheal", "buy alias when survivor players use RELOAD while sv_infinite_ammo = 1\nSet empty to disable");
 	ISprayAlias			= AutoExecConfig_CreateConVar("l4d2_points_infected_spray_alias", "", "buy alias when infected players use spray button.\nThis disables spray for infected players.\nSet empty to disable");
-	SSprayAlias			= AutoExecConfig_CreateConVar("l4d2_points_survivor_spray_alias", "", "buy alias when infected players use spray button.\nThis disables spray for survivor players.\nSet empty to disable");
+	SSprayAlias			= AutoExecConfig_CreateConVar("l4d2_points_survivor_spray_alias", "", "buy alias when survivor players use spray button.\nThis disables spray for survivor players.\nSet empty to disable");
 	IFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_infected_flashlight_alias", "umob", "buy alias when infected players use spray button.\nSet empty to disable");
 	SFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_survivor_flashlight_alias", "", "buy alias when infected players use spray button.\nThis disables flashlight for survivor players.\nSet empty to disable");
 
