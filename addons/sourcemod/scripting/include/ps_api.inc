@@ -138,6 +138,8 @@ native bool PSAPI_CreateProduct(int iCategory, float fCost, char[] sName, char[]
 native bool PSAPI_FindCategoryByIdentifier(const char[] sID, any[] aCat);
 
 // Given an alias, triggers every condition and every global forward except OnShouldGiveProduct to determine if the product is possible to buy.
+// If target == 0, we treat target as buyer and ignore price as a factor if product can be bought.
+// To do the same with a real target, set target to -1 * target
 native bool PSAPI_CanProductBeBought(const char[] sAlias, int buyer, int target);
 
 // Feed a list of aliases seperated by spaces to refund every delayed instance of them for the buyer target duo:
