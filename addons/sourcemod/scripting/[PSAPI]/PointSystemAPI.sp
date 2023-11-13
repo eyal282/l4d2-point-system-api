@@ -69,46 +69,55 @@ Handle Notifications      = INVALID_HANDLE;
 Handle PointsHeal = INVALID_HANDLE;
 */
 // Survivor point earning things
-Handle SValueKillingSpree = INVALID_HANDLE;
-Handle SNumberKill        = INVALID_HANDLE;
-Handle SValueHeadSpree    = INVALID_HANDLE;
-Handle SNumberHead        = INVALID_HANDLE;
-Handle SSIKill            = INVALID_HANDLE;
-Handle STankKill          = INVALID_HANDLE;
-Handle SWitchKill         = INVALID_HANDLE;
-Handle SWitchCrown        = INVALID_HANDLE;
-Handle SHeal              = INVALID_HANDLE;
-Handle SHealWarning       = INVALID_HANDLE;
-Handle SProtect           = INVALID_HANDLE;
-Handle SNumberProtect     = INVALID_HANDLE;
-Handle SRevive            = INVALID_HANDLE;
-Handle SLedge             = INVALID_HANDLE;
-Handle SDefib             = INVALID_HANDLE;
-Handle STBurn             = INVALID_HANDLE;
-Handle STSolo             = INVALID_HANDLE;
-Handle SWBurn             = INVALID_HANDLE;
-Handle STag               = INVALID_HANDLE;
-// Infected point earning things
-Handle IChoke             = INVALID_HANDLE;
-Handle IPounce            = INVALID_HANDLE;
-Handle ICarry             = INVALID_HANDLE;
-Handle IImpact            = INVALID_HANDLE;
-Handle IRide              = INVALID_HANDLE;
-Handle ITag               = INVALID_HANDLE;
-Handle IIncap             = INVALID_HANDLE;
-Handle IHurt              = INVALID_HANDLE;
-Handle INumberHurt        = INVALID_HANDLE;
-Handle IHurtAnnounceDelay = INVALID_HANDLE;
-Handle ISpit              = INVALID_HANDLE;
-Handle ISpitAnnounceDelay = INVALID_HANDLE;
-Handle IKill              = INVALID_HANDLE;
-Handle IKarma             = INVALID_HANDLE;
 
-Handle ResetPoints = INVALID_HANDLE;
-Handle StartPoints = INVALID_HANDLE;
-Handle BotPriceRatio = INVALID_HANDLE;
-Handle RequestPoints = INVALID_HANDLE;
-Handle DeadBuy     = INVALID_HANDLE;
+ConVar infiniteAmmo;
+
+ConVar IReloadAlias; 
+ConVar SReloadAlias;
+ConVar ISprayAlias;
+ConVar SSprayAlias;
+ConVar IFlashlightAlias;
+ConVar SFlashlightAlias;
+ConVar SValueKillingSpree;
+ConVar SNumberKill;
+ConVar SValueHeadSpree;
+ConVar SNumberHead;
+ConVar SSIKill;
+ConVar STankKill;
+ConVar SWitchKill;
+ConVar SWitchCrown;
+ConVar SHeal;
+ConVar SHealWarning;
+ConVar SProtect;
+ConVar SNumberProtect;
+ConVar SRevive;
+ConVar SLedge;
+ConVar SDefib;
+ConVar STBurn;
+ConVar STSolo;
+ConVar SWBurn;
+ConVar STag;
+// Infected point earning things
+ConVar IChoke;
+ConVar IPounce;
+ConVar ICarry;
+ConVar IImpact;
+ConVar IRide;
+ConVar ITag;
+ConVar IIncap;
+ConVar IHurt;
+ConVar INumberHurt;
+ConVar IHurtAnnounceDelay;
+ConVar ISpit;
+ConVar ISpitAnnounceDelay;
+ConVar IKill;
+ConVar IKarma;
+
+ConVar ResetPoints;
+ConVar StartPoints;
+ConVar BotPriceRatio;
+ConVar RequestPoints;
+ConVar DeadBuy;
 
 public Plugin myinfo =
 {
@@ -170,6 +179,15 @@ public void OnPluginStart()
 
 	AutoExecConfig_SetFile("PointSystemAPI");
 
+	infiniteAmmo 		= FindConVar("sv_infinite_ammo");
+
+	IReloadAlias        = AutoExecConfig_CreateConVar("l4d2_points_infected_reload_alias", "fheal", "buy alias when infected players use RELOAD.\nSet empty to disable");
+	SReloadAlias        = AutoExecConfig_CreateConVar("l4d2_points_survivor_reload_alias", "fheal", "buy alias when survivor players use RELOAD while sv_infinite_ammo = 1\nSet empty to disable");
+	ISprayAlias			= AutoExecConfig_CreateConVar("l4d2_points_infected_spray_alias", "", "buy alias when infected players use spray button.\nThis disables spray for infected players.\nSet empty to disable");
+	SSprayAlias			= AutoExecConfig_CreateConVar("l4d2_points_survivor_spray_alias", "", "buy alias when infected players use spray button.\nThis disables spray for survivor players.\nSet empty to disable");
+	IFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_infected_flashlight_alias", "umob", "buy alias when infected players use spray button.\nSet empty to disable");
+	SFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_survivor_flashlight_alias", "", "buy alias when infected players use spray button.\nThis disables flashlight for survivor players.\nSet empty to disable");
+
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
 	BotPriceRatio	   = AutoExecConfig_CreateConVar("l4d2_points_bot_price_ratio", "1.0", "Price ratio when buying for bots. 1.0 = normal price. 2.0 = double price. 0.5 = half price.", _, true, 0.0, true, 5.0);
 	RequestPoints	   = AutoExecConfig_CreateConVar("l4d2_points_request_points", "1", "Enable !rp command?");
@@ -218,6 +236,7 @@ public void OnPluginStart()
 	// Cleaning should be done at the end
 	AutoExecConfig_CleanFile();
 
+	AddCommandListener(Listener_Impulse, "impulse");
 	AddCommandListener(Listener_Say, "say");
 	AddCommandListener(Listener_Say, "say_team");
 
@@ -603,6 +622,19 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 	int client       = GetNativeCell(2);
 	int targetclient = GetNativeCell(3);
 
+	bool bIgnorePrice = false;
+
+	if(targetclient <= 0)
+	{
+		bIgnorePrice = true;
+
+		if(targetclient == 0)
+			targetclient = client;
+
+		else
+			targetclient = -1 * targetclient;
+	}
+	
 	if (LookupProductByAlias(sAlias, product) == -1)
 		return false;
 
@@ -620,9 +652,17 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 	bool bShouldReturn;
 	char sError[1];
 
+	float fOldCost = product.fCost;
+
+	if(fOldCost)
+	{
+		product.fCost = 0.0;
+	}
+
 	if (PSAPI_GetErrorFromBuyflags(client, sAlias, product, targetclient, sError, sizeof(sError), bShouldReturn))
 		return false;
 
+	product.fCost = fOldCost;
 	Call_StartForward(g_fwOnGetParametersProduct);
 
 	enProduct alteredProduct;
@@ -633,6 +673,7 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 	Call_PushStringEx(alteredProduct.sInfo, sizeof(enProduct::sInfo), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushStringEx(alteredProduct.sName, sizeof(enProduct::sName), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	Call_PushStringEx(alteredProduct.sDescription, sizeof(enProduct::sDescription), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+
 	Call_PushCell(targetclient);
 	Call_PushCellRef(alteredProduct.fCost);
 	Call_PushFloatRef(alteredProduct.fDelay);
@@ -642,7 +683,7 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 
 	alteredProduct.fCost = float(RoundToFloor(alteredProduct.fCost));
 
-	if (g_fPoints[client] < alteredProduct.fCost)
+	if (g_fPoints[client] < alteredProduct.fCost && !bIgnorePrice)
 		return false;
 
 	Call_StartForward(g_fwOnTryBuyProduct);
@@ -1662,6 +1703,83 @@ public Action Listener_Say(int client, char[] sArg, int args)
 		g_iGiveMeUserId = GetClientUserId(client);
 	}
 
+	return Plugin_Continue;
+}
+
+int g_iLastButtons[MAXPLAYERS+1];
+
+public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
+{
+	if(buttons & IN_RELOAD)
+	{
+		if (!(g_iLastButtons[client] & IN_RELOAD))
+		{
+			OnReloadButtonPressed(client);
+		}
+	}
+
+	g_iLastButtons[client] = buttons;
+
+	return Plugin_Continue;
+}
+
+public void OnReloadButtonPressed(int client)
+{
+	char sAlias[32];
+	switch(L4D_GetClientTeam(client))
+	{
+		case L4DTeam_Infected: IReloadAlias.GetString(sAlias, sizeof(sAlias));
+		case L4DTeam_Survivor:
+		{
+			if(infiniteAmmo.IntValue == 1)
+			{
+				SReloadAlias.GetString(sAlias, sizeof(sAlias));
+			}
+		}
+	}
+	if(sAlias[0] == EOS)
+		return;
+
+	HandleBuyBind(client, sAlias);
+}
+
+public Action Listener_Impulse(int client, char[] sArg, int args)
+{
+	char sFirstArg[8];
+	GetCmdArg(1, sFirstArg, sizeof(sFirstArg));
+
+	if(StringToInt(sFirstArg) == 100)
+	{
+		char sAlias[32];
+		switch(L4D_GetClientTeam(client))
+		{
+			case L4DTeam_Infected: IFlashlightAlias.GetString(sAlias, sizeof(sAlias));
+			case L4DTeam_Survivor: SFlashlightAlias.GetString(sAlias, sizeof(sAlias));
+		}
+
+		if(sAlias[0] == EOS)
+			return Plugin_Continue;
+
+		HandleBuyBind(client, sAlias);
+
+		return Plugin_Continue;
+	}
+	if(StringToInt(sFirstArg) == 201)
+	{
+		char sAlias[32];
+		switch(L4D_GetClientTeam(client))
+		{
+			case L4DTeam_Infected: ISprayAlias.GetString(sAlias, sizeof(sAlias));
+			case L4DTeam_Survivor: SSprayAlias.GetString(sAlias, sizeof(sAlias));
+		}
+
+		if(sAlias[0] == EOS)
+			return Plugin_Continue;
+
+		HandleBuyBind(client, sAlias);
+
+		return Plugin_Continue;
+	}
 	return Plugin_Continue;
 }
 public Action Command_PointSystem(int client, int args)
@@ -3889,4 +4007,12 @@ stock void CalculatePointsGain(int attacker, float &fPoints, const char[] reason
 	Call_PushString(reason);
 
 	Call_Finish();
+}
+
+stock void HandleBuyBind(int client, const char[] sAlias)
+{
+	if (PSAPI_CanProductBeBought(sAlias, client, client) || PSAPI_CanProductBeBought(sAlias, client, 0))
+	{
+		FakeClientCommand(client, "sm_buy %s", sAlias);
+	}
 }
