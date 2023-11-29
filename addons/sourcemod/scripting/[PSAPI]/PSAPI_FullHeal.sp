@@ -283,11 +283,11 @@ public void CreateProducts()
 		char sDescription[256];
 		FormatEx(sDescription, sizeof(sDescription), "Heals you to max health\nTanks gain less health\nBoomers pay %i%% the price\nSpitters pay %i%% the price", RoundFloat(GetConVarFloat(g_hBoomerRatioCost) * 100.0), RoundFloat(GetConVarFloat(g_hBoomerRatioCost) * 100.0));
 		PSAPI_CreateProduct(iCategory, g_hHealCost.FloatValue, "Heal", sDescription, "heal", "Partial Heal", 0.0, 0.0,
-		                    BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);
+		                    BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED | BUYFLAG_TEAM);
 
 		FormatEx(sDescription, sizeof(sDescription), "Heals you to max health\nFor tanks, as if they spam !buy heal\nBoomers pay %i%% the price\nSpitters pay %i%% the price", RoundFloat(GetConVarFloat(g_hBoomerRatioCost) * 100.0), RoundFloat(GetConVarFloat(g_hBoomerRatioCost) * 100.0));
 		PSAPI_CreateProduct(iCategory, g_hHealCost.FloatValue, "Full Heal", sDescription, "fheal fullheal", "Full Heal", 0.0, 0.0,
-		                    BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED | BUYFLAG_TEAM);
+		                    BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_INCAP | BUYFLAG_PINNED | BUYFLAG_TEAM);
 	}
 }
 

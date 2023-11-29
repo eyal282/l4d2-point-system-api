@@ -12,7 +12,7 @@ float version = 1.0;
 // But due to inaccuracies, I decrement slightly.
 float SPIT_DELAY = 0.17;
 
-ArrayList g_aCategories, g_aProducts, g_aDelayedProducts;
+ArrayList g_aStartPointAuthIds, g_aCategories, g_aProducts, g_aDelayedProducts;
 
 GlobalForward g_fwOnSetStartPoints;
 GlobalForward g_fwOnGainPoints;
@@ -145,6 +145,7 @@ public void OnPluginEnd()
 
 public void OnPluginStart()
 {
+	g_aStartPointAuthIds = new ArrayList(35);
 	g_aCategories      = new ArrayList(sizeof(enCategory));
 	g_aProducts        = new ArrayList(sizeof(enProduct));
 	g_aDelayedProducts = new ArrayList(sizeof(enDelayedProduct));
@@ -448,6 +449,8 @@ public Action Timer_Cleanup(Handle hTimer)
 		if (!StrEqual(sClassname, "prop_physics") && HasEntProp(iEntity, Prop_Data, "m_hOwnerEntity") && GetEntPropEnt(iEntity, Prop_Data, "m_hOwnerEntity") != -1)
 			continue;
 
+		PrintToServer("Howdy gamers %i | %s", iEntity, sClassname);
+		
 		char sTargetname[64];
 		GetEntPropString(iEntity, Prop_Data, "m_iName", sTargetname, sizeof(sTargetname));
 
@@ -908,42 +911,7 @@ public Action Event_ChangeTeam(Handle event, const char[] name, bool dontBroadca
 	// Just joined the server.
 	if(oldteam == 0)
 	{
-		float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
-		float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
-
-		float fStartPoints = GetConVarFloat(StartPoints);
-
-		Call_StartForward(g_fwOnSetStartPoints);
-
-		Call_PushCell(client);
-		Call_PushCell(L4DTeam_Survivor);
-		
-		Call_PushFloatRef(fStartPoints);
-		Call_PushFloat(fAverageSurvivorsPrice);
-
-		Call_Finish();
-
-		if(g_fSavedSurvivorPoints[client] < fStartPoints)
-		{
-			g_fSavedSurvivorPoints[client] = fStartPoints;
-		}
-
-		fStartPoints = GetConVarFloat(StartPoints);
-
-		Call_StartForward(g_fwOnSetStartPoints);
-
-		Call_PushCell(client);
-		Call_PushCell(L4DTeam_Infected);
-		
-		Call_PushFloatRef(fStartPoints);
-		Call_PushFloat(fAverageInfectedPrice);
-
-		Call_Finish();
-
-		if(g_fSavedInfectedPoints[client] < fStartPoints)
-		{
-			g_fSavedInfectedPoints[client] = fStartPoints;
-		}
+		CheckGiveStartPoints(client);
 	}
 	if (oldteam == 2)
 		g_fSavedSurvivorPoints[client] = g_fPoints[client];
@@ -984,6 +952,58 @@ public void OnClientDisconnect(int client)
 	headshotcount[client] = 0;
 }
 
+stock void CheckGiveStartPoints(int client, bool bRoundStart = false)
+{
+	char authId[35];
+	GetClientAuthId(client, AuthId_Steam2, authId, sizeof(authId));
+
+	if(g_aStartPointAuthIds.FindString(authId) != -1)
+		return;
+
+	float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
+	float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
+
+	float fStartPoints = GetConVarFloat(StartPoints);
+
+	Call_StartForward(g_fwOnSetStartPoints);
+
+	Call_PushCell(client);
+	Call_PushCell(L4DTeam_Survivor);
+	
+	Call_PushFloatRef(fStartPoints);
+	Call_PushFloat(fAverageSurvivorsPrice);
+
+	Call_Finish();
+
+	if(g_fSavedSurvivorPoints[client] < fStartPoints)
+	{
+		g_fSavedSurvivorPoints[client] = fStartPoints;
+	}
+
+	fStartPoints = GetConVarFloat(StartPoints);
+
+	Call_StartForward(g_fwOnSetStartPoints);
+
+	Call_PushCell(client);
+	Call_PushCell(L4DTeam_Infected);
+	
+	Call_PushFloatRef(fStartPoints);
+	Call_PushFloat(fAverageInfectedPrice);
+
+	Call_Finish();
+
+	if(g_fSavedInfectedPoints[client] < fStartPoints)
+	{
+		g_fSavedInfectedPoints[client] = fStartPoints;
+	}
+
+	g_aStartPointAuthIds.PushString(authId);
+
+	if(bRoundStart)
+	{
+		PrintToChat(client, "\x04[PS]\x03 Your Start Points: \x05%i", GetClientPoints(client));
+	}
+}
 public Action Check(Handle Timer, any client)
 {
 	if (!IsClientConnected(client))
@@ -1051,6 +1071,8 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 	if (!IsModelPrecached("models/w_models/weapons/w_m60.mdl")) PrecacheModel("models/w_models/weapons/w_m60.mdl");
 	if (!IsModelPrecached("models/v_models/v_m60.mdl")) PrecacheModel("models/v_models/v_m60.mdl");
 
+	g_aStartPointAuthIds.Clear();
+
 	float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
 	float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
 
@@ -1063,43 +1085,7 @@ public Action Event_RStart(Handle event, char[] event_name, bool dontBroadcast)
 
 			if(IsClientInGame(i) && !IsFakeClient(i))
 			{			
-				Call_StartForward(g_fwOnSetStartPoints);
-
-				Call_PushCell(i);
-				Call_PushCell(L4DTeam_Survivor);
-				
-				Call_PushFloatRef(fStartPoints);
-				Call_PushFloat(fAverageSurvivorsPrice);
-
-				Call_Finish();
-
-				g_fSavedSurvivorPoints[i] = fStartPoints;
-
-				fStartPoints = GetConVarFloat(StartPoints);
-
-				Call_StartForward(g_fwOnSetStartPoints);
-
-				Call_PushCell(i);
-				Call_PushCell(L4DTeam_Infected);
-				
-				Call_PushFloatRef(fStartPoints);
-				Call_PushFloat(fAverageInfectedPrice);
-
-				Call_Finish();
-
-				g_fSavedInfectedPoints[i] = fStartPoints;
-
-				if(L4D_GetClientTeam(i) == L4DTeam_Survivor)
-				{
-					g_fPoints[i]              = g_fSavedSurvivorPoints[i];
-				}
-				else if(L4D_GetClientTeam(i) == L4DTeam_Infected)
-				{
-					g_fPoints[i]              = g_fSavedInfectedPoints[i];
-				}
-
-				
-				PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%i", GetClientPoints(i));
+				CheckGiveStartPoints(i, true);
 			}
 			else
 			{
@@ -1183,9 +1169,6 @@ public Action Event_Finale(Handle event, char[] event_name, bool dontBroadcast)
 	GetConVarString(FindConVar("mp_gamemode"), gamemode, sizeof(gamemode));
 	if (StrEqual(gamemode, "versus", false) || StrEqual(gamemode, "teamversus", false)) return Plugin_Continue;
 
-	float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
-	float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
-
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		// Redeclaring outside the loop can cause a player to alter the start points of all other players.
@@ -1193,40 +1176,7 @@ public Action Event_Finale(Handle event, char[] event_name, bool dontBroadcast)
 
 		if(IsClientInGame(i) && !IsFakeClient(i))
 		{			
-			Call_StartForward(g_fwOnSetStartPoints);
-
-			Call_PushCell(i);
-			Call_PushCell(L4DTeam_Survivor);
-			
-			Call_PushFloatRef(fStartPoints);
-			Call_PushFloat(fAverageSurvivorsPrice);
-
-			Call_Finish();
-
-			g_fSavedSurvivorPoints[i] = fStartPoints;
-
-			fStartPoints = GetConVarFloat(StartPoints);
-
-			Call_StartForward(g_fwOnSetStartPoints);
-
-			Call_PushCell(i);
-			Call_PushCell(L4DTeam_Infected);
-			
-			Call_PushFloatRef(fStartPoints);
-			Call_PushFloat(fAverageInfectedPrice);
-
-			Call_Finish();
-
-			if(L4D_GetClientTeam(i) == L4DTeam_Survivor)
-			{
-				g_fPoints[i]              = g_fSavedSurvivorPoints[i];
-			}
-			else if(L4D_GetClientTeam(i) == L4DTeam_Infected)
-			{
-				g_fPoints[i]              = g_fSavedInfectedPoints[i];
-			}
-
-			PrintToChat(i, "\x04[PS]\x03 Your Start Points: \x05%i", GetClientPoints(i));
+			CheckGiveStartPoints(i, true);
 		}
 		else
 		{
