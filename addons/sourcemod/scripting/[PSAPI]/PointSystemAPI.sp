@@ -999,6 +999,15 @@ stock void CheckGiveStartPoints(int client, bool bRoundStart = false)
 
 	g_aStartPointAuthIds.PushString(authId);
 
+	if(L4D_GetClientTeam(client) == L4DTeam_Survivor)
+	{
+		g_fPoints[client] = g_fSavedSurvivorPoints[client];
+	}
+	else if(L4D_GetClientTeam(client) == L4DTeam_Infected)
+	{
+		g_fPoints[client] = g_fSavedInfectedPoints[client];
+	}
+	
 	if(bRoundStart)
 	{
 		PrintToChat(client, "\x04[PS]\x03 Your Start Points: \x05%i", GetClientPoints(client));
@@ -1023,7 +1032,7 @@ stock bool IsAllowedGameMode()
 	char gamemode[24], gamemodeactive[64];
 	GetConVarString(FindConVar("mp_gamemode"), gamemode, sizeof(gamemode));
 	GetConVarString(Modes, gamemodeactive, sizeof(gamemodeactive));
-	return (StrContains(gamemodeactive, gamemode) != -1);
+	return (StrContains(gamemodeactive, gamemode, false) != -1);
 }
 
 stock bool IsAllowedReset()
@@ -1031,7 +1040,7 @@ stock bool IsAllowedReset()
 	char gamemode[24], gamemodeactive[64];
 	GetConVarString(FindConVar("mp_gamemode"), gamemode, sizeof(gamemode));
 	GetConVarString(ResetPoints, gamemodeactive, sizeof(gamemodeactive));
-	return (StrContains(gamemodeactive, gamemode) != -1);
+	return (StrContains(gamemodeactive, gamemode, false) != -1);
 }
 
 public Action Event_REnd(Handle event, char[] event_name, bool dontBroadcast)
