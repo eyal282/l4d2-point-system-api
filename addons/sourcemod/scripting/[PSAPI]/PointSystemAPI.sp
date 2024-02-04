@@ -825,6 +825,11 @@ public any Native_FetchProductCostByAlias(Handle plugin, int numParams)
 		return -1.0;
 	}
 
+	if(buyer == 0)
+	{
+		return float(RoundToFloor(product.fCost));
+	}
+	
 	Call_StartForward(g_fwOnGetParametersProduct);
 
 	enProduct alteredProduct;
