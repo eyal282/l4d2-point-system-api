@@ -60,8 +60,9 @@ int  headshotcount[MAXPLAYERS + 1] = { 0, ... };
 #define ACHECK3  if (attacker > 0 && !IsFakeClient(attacker) && GetClientTeam(attacker) == 3 && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
 #define CCHECK3  if (client > 0 && !IsFakeClient(client) && GetClientTeam(client) == 3 && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
 // Other
-ConVar SimplifiedEdition;
 Handle Enable             = INVALID_HANDLE;
+ConVar TeamBuy;
+ConVar SimplifiedEdition;
 Handle Modes              = INVALID_HANDLE;
 Handle Notifications      = INVALID_HANDLE;
 // Item buyables
@@ -191,6 +192,7 @@ public void OnPluginStart()
 	IFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_infected_flashlight_alias", "umob", "buy alias when infected players use spray button.\nSet empty to disable");
 	SFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_survivor_flashlight_alias", "lc", "buy alias when infected players use spray button.\nThis disables flashlight for survivor players.\nSet empty to disable");
 
+	TeamBuy  		   = AutoExecConfig_CreateConVar("l4d2_points_team_buy", "1", "Whether you can buy for team");
 	SimplifiedEdition  = AutoExecConfig_CreateConVar("l4d2_points_simplified_edition", "0", "Set to 1 to reduce text bloat");
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
 	BotPriceRatio	   = AutoExecConfig_CreateConVar("l4d2_points_bot_price_ratio", "1.0", "Price ratio when buying for bots. 1.0 = normal price. 2.0 = double price. 0.5 = half price.", _, true, 0.0, true, 5.0);
@@ -247,7 +249,6 @@ public void OnPluginStart()
 	//AddMultiTargetFilter("@giveme", TargetFilter_GiveMe, "a survivor in trouble", false);
 
 	RegConsoleCmd("sm_ps", Command_PointSystem);
-	RegConsoleCmd("sm_rp", Command_RequestPoints);
 	RegConsoleCmd("sm_rebuy", Command_Rebuy);
 	RegConsoleCmd("sm_shortcuts", Command_Aliases);
 	RegConsoleCmd("sm_shortcut", Command_Aliases);
@@ -256,14 +257,8 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_buystuff", BuyMenu);
 	RegConsoleCmd("sm_buy", BuyMenu);
 	RegConsoleCmd("sm_usepoints", BuyMenu);
-	RegConsoleCmd("sm_blist", Command_BuyList);
-	RegConsoleCmd("sm_buylist", Command_BuyList);
 	RegConsoleCmd("sm_points", ShowPoints);
 	RegConsoleCmd("sm_teampoints", ShowTeamPoints);
-	RegConsoleCmd("sm_send", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
-	RegConsoleCmd("sm_sendpoints", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
-	RegConsoleCmd("sm_sp", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
-	RegConsoleCmd("sm_splist", Command_SendPointsList, "sm_sendpointslist [amount/all]");
 	RegAdminCmd("sm_heal", Command_Heal, ADMFLAG_SLAY, "sm_heal <target> [amount] - Won't reset incaps if you select amount.");
 
 	RegAdminCmd("sm_incap", Command_Incap, ADMFLAG_SLAY, "sm_incap <target>");
@@ -305,11 +300,30 @@ public void OnConfigsExecuted()
 	AddServerTag2("buy");
 	AddServerTag2("psapi");
 	AddServerTag2("!buy");
+
+	if(TeamBuy.BoolValue)
+	{
+		RegConsoleCmd("sm_blist", Command_BuyList);
+		RegConsoleCmd("sm_buylist", Command_BuyList);
+		RegConsoleCmd("sm_send", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
+		RegConsoleCmd("sm_sendpoints", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
+		RegConsoleCmd("sm_sp", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
+		RegConsoleCmd("sm_splist", Command_SendPointsList, "sm_sendpointslist [amount/all]");
+
+		if(RequestPoints.BoolValue)
+		{
+			RegConsoleCmd("sm_rp", Command_RequestPoints);
+		}
+	}
 }
 
 // return Plugin_Handled or above to prevent the user from buying anything.
 public Action PointSystemAPI_OnCanBuyProducts(int buyer, int target)
 {
+	if(buyer != target && !TeamBuy.BoolValue)
+	{
+		return PSAPI_SetErrorByPriority(50, "Error: You cannot buy products for your teammates!");
+	}
 	if (GetClientTeam(buyer) != view_as<int>(L4DTeam_Survivor))
 		return Plugin_Continue;
 
@@ -408,14 +422,30 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 		if (GetConVarBool(Notifications) && NextMultipleDamage[i] <= GetEngineTime() && MultipleDamageStack[i] != 0.0)
 		{
 			NextMultipleDamage[i] = GetEngineTime() + GetConVarFloat(IHurtAnnounceDelay);
-			UC_PrintToChat(i, "%sDamage + \x05%d\x03 points *\x05 %dx\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", GetConVarInt(INumberHurt) == 1 ? "Inflicted " : "Multiple ", GetConVarInt(IHurt), RoundToFloor(MultipleDamageStack[i] / GetConVarFloat(IHurt)), RoundToFloor(MultipleDamageStack[i]), GetClientPoints(i));
+
+			if(SimplifiedEdition.BoolValue)
+			{
+				UC_PrintToChat(i, "%sDamage + \x05%d\x03 points *\x05 %dx\x03 =\x05 %d", GetConVarInt(INumberHurt) == 1 ? "Inflicted " : "Multiple ", GetConVarInt(IHurt), RoundToFloor(MultipleDamageStack[i] / GetConVarFloat(IHurt)), RoundToFloor(MultipleDamageStack[i]));
+			}
+			else
+			{
+				UC_PrintToChat(i, "%sDamage + \x05%d\x03 points *\x05 %dx\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", GetConVarInt(INumberHurt) == 1 ? "Inflicted " : "Multiple ", GetConVarInt(IHurt), RoundToFloor(MultipleDamageStack[i] / GetConVarFloat(IHurt)), RoundToFloor(MultipleDamageStack[i]), GetClientPoints(i));
+			}
 			MultipleDamageStack[i] = 0.0;
 		}
 
 		if (GetConVarBool(Notifications) && NextSpitterDamage[i] <= GetEngineTime() && SpitterDamageStack[i] != 0.0)
 		{
 			NextSpitterDamage[i] = GetEngineTime() + GetConVarFloat(ISpitAnnounceDelay);
-			UC_PrintToChat(i, "Acid Damage + \x05%d\x03 points *\x05 %.1fsec\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", GetConVarInt(ISpit), SpitterDamageStack[i] / GetConVarFloat(ISpit), RoundToFloor(SpitterDamageStack[i]), GetClientPoints(i));
+
+			if(SimplifiedEdition.BoolValue)
+			{
+				UC_PrintToChat(i, "Acid Damage + \x05%d\x03 points *\x05 %.1fsec\x03 =\x05 %d", GetConVarInt(ISpit), SpitterDamageStack[i] / GetConVarFloat(ISpit), RoundToFloor(SpitterDamageStack[i]));
+			}
+			else
+			{
+				UC_PrintToChat(i, "Acid Damage + \x05%d\x03 points *\x05 %.1fsec\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", GetConVarInt(ISpit), SpitterDamageStack[i] / GetConVarFloat(ISpit), RoundToFloor(SpitterDamageStack[i]), GetClientPoints(i));
+			}
 			SpitterDamageStack[i] = 0.0;
 		}
 	}
@@ -783,7 +813,16 @@ public any Native_RefundProducts(Handle plugin, int numParams)
 				g_fPoints[client] += dProduct.fCost;
 
 				if (productPos != -1)
-					UC_PrintToChat(client, "Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", product.sName, RoundToFloor(dProduct.fCost), GetClientPoints(client));
+				{
+					if(SimplifiedEdition.BoolValue)
+					{
+						UC_PrintToChat(client, "Refunded %s\x05 + %d\x03 points", product.sName, RoundToFloor(dProduct.fCost));
+					}
+					else
+					{
+						UC_PrintToChat(client, "Refunded %s\x05 + %d\x03 points (Σ: \x05%d\x03)", product.sName, RoundToFloor(dProduct.fCost), GetClientPoints(client));
+					}
+				}
 
 				RemoveDelayedProductByTimer(dProduct.timer);
 
@@ -1581,11 +1620,8 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 			
 
 			CalculatePointsGain(attacker, fPoints, "Acid Damage");
-			if(GetConVarFloat(ISpitAnnounceDelay) == 0.0 && GetConVarBool(Notifications))
-			{
-				//UC_PrintToChat(attacker, "Acid Damage + \x05%d\x03 points *\x05 %.1fsec\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", RoundToFloor(fPoints / SpitterDamageStack[attacker]), SpitterDamageStack[attacker], fPoints, GetClientPoints(attacker));
-			}
-			else
+
+			if(GetConVarFloat(ISpitAnnounceDelay) != 0.0 || !GetConVarBool(Notifications))
 			{
 				SpitterDamageStack[attacker] += fPoints;
 			}
@@ -1746,12 +1782,19 @@ public Action Command_PointSystem(int client, int args)
 	if (CommandExists("sm_autobuy"))
 		UC_PrintToChat(client, "Use\x04 sm_autobuy\x03 to buy certain survivor products automatically");
 
-	UC_PrintToChat(client, "Use\x04 sm_sp\x03 to send points for your teammates");
+	if(TeamBuy.BoolValue)
+	{
+		UC_PrintToChat(client, "Use\x04 sm_sp\x03 to send points for your teammates");
+	}
 
 	if(GetConVarBool(RequestPoints))
 		UC_PrintToChat(client, "Use\x04 sm_rp\x03 to ask your teammates for points.");
 
-	UC_PrintToChat(client, "Use\x04 sm_splist / sm_buylist\x03 if your teammates have weird names");
+	if(TeamBuy.BoolValue)
+	{
+		UC_PrintToChat(client, "Use\x04 sm_splist / sm_buylist\x03 if your teammates have weird names");
+	}
+
 	UC_PrintToChat(client, "Use\x04 sm_alias\x03 if you want to find a better alias for a product");
 
 	return Plugin_Handled;
@@ -2610,7 +2653,14 @@ public Action Command_SendPoints(int client, int args)
 
 			else if (pointsToSend > g_fPoints[client])
 			{
-				UC_PrintToChat(client, "Error: Not enough points to send! (Σ: \x05%d\x03)", GetClientPoints(client));
+				if(SimplifiedEdition.BoolValue)
+				{
+					UC_PrintToChat(client, "Error: Not enough points to send!");	
+				}
+				else
+				{
+					UC_PrintToChat(client, "Error: Not enough points to send! (Σ: \x05%d\x03)", GetClientPoints(client));
+				}
 				break;
 			}
 
@@ -2638,8 +2688,17 @@ public Action Command_SendPoints(int client, int args)
 			char name[33], sendername[33];
 			GetClientName(targetclient, name, sizeof(name));
 			GetClientName(client, sendername, sizeof(sendername));
-			UC_PrintToChat(client, "You gave \x05%d\x03 points to %s. (Σ: \x05%d\x03)", RoundToFloor(pointsToSend), name, GetClientPoints(client));
-			UC_PrintToChat(targetclient, "%s gave you \x05%d\x03 points. (Σ: \x05%d\x03)", sendername, RoundToFloor(pointsToSend), GetClientPoints(targetclient));
+
+			if(SimplifiedEdition.BoolValue)
+			{
+				UC_PrintToChat(client, "You gave \x05%d\x03 points to %s.", RoundToFloor(pointsToSend), name);
+				UC_PrintToChat(targetclient, "%s gave you \x05%d\x03 points.", sendername, RoundToFloor(pointsToSend));
+			}
+			else
+			{
+				UC_PrintToChat(client, "You gave \x05%d\x03 points to %s. (Σ: \x05%d\x03)", RoundToFloor(pointsToSend), name, GetClientPoints(client));
+				UC_PrintToChat(targetclient, "%s gave you \x05%d\x03 points. (Σ: \x05%d\x03)", sendername, RoundToFloor(pointsToSend), GetClientPoints(targetclient));
+			}
 		}
 	}
 	else
@@ -2954,7 +3013,15 @@ void BuildBuyMenu(int client, int iCategory = -1)
 			sName = alteredProduct.sName;
 		}
 
-		FormatEx(sDisplay, sizeof(sDisplay), "%s\nChat: !buy %s", sName, sFirstAlias);
+		if(SimplifiedEdition.BoolValue)
+		{
+			FormatEx(sDisplay, sizeof(sDisplay), "%s\nChat: !buy %s", sName, sFirstAlias);
+		}
+		else
+		{
+			FormatEx(sDisplay, sizeof(sDisplay), "%s", sName);
+		}
+
 		AddMenuItem(hMenu, sInfo, sDisplay);
 		bAnyItems = true;
 	}
@@ -3477,11 +3544,28 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 			if (targetclient == client)
 			{
 				if (GetConVarBool(Notifications))
-					UC_PrintToChat(client, "Bought\x04 %s\x03 for\x05 yourself\x03 (Σ: \x05%d\x03)", alteredProduct.sName, GetClientPoints(client));
+				{
+					if(SimplifiedEdition.BoolValue)
+					{
+						UC_PrintToChat(client, "Bought\x04 %s\x03%s", alteredProduct.sName, TeamBuy.BoolValue ? " for\x05 yourself" : "");
+					}
+					else
+					{
+						UC_PrintToChat(client, "Bought\x04 %s\x03%s (Σ: \x05%d\x03)", alteredProduct.sName, TeamBuy.BoolValue ? " for\x05 yourself" : "", GetClientPoints(client));
+					}
+				}
 			}
 			else
 			{
-				UC_PrintToChat(client, "Successfully bought\x04 %s\x03 for Player\x05 %N\x03 (Σ: \x05%d\x03)", alteredProduct.sName, targetclient, GetClientPoints(client));
+				if(SimplifiedEdition.BoolValue)
+				{
+					UC_PrintToChat(client, "Successfully bought\x04 %s\x03 for\x05 %N", alteredProduct.sName, targetclient);
+				}
+				else
+				{
+					UC_PrintToChat(client, "Successfully bought\x04 %s\x03 for Player\x05 %N\x03 (Σ: \x05%d\x03)", alteredProduct.sName, targetclient, GetClientPoints(client));
+				}
+
 				UC_PrintToChat(targetclient, "Player \x05%N \x03bought you\x04 %s", client, sFirstArg);
 			}
 		}
@@ -3491,11 +3575,27 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 
 			if (targetclient == client)
 			{
-				UC_PrintToChat(client, "You will buy\x04 %s\x03 for\x05 yourself\x03 in %.1fsec\x03  (Σ: \x05%d\x03)", alteredProduct.sName, alteredProduct.fDelay, GetClientPoints(client));
+				if(SimplifiedEdition.BoolValue)
+				{
+					UC_PrintToChat(client, "You will buy\x04 %s\x03%s\x03 in %.1fsec", alteredProduct.sName, TeamBuy.BoolValue ? " for\x05 yourself" : "", alteredProduct.fDelay);	
+				}
+				else
+				{
+					UC_PrintToChat(client, "You will buy\x04 %s\x03%s\x03 in %.1fsec\x03  (Σ: \x05%d\x03)", alteredProduct.sName, TeamBuy.BoolValue ? " for\x05 yourself" : "", alteredProduct.fDelay, GetClientPoints(client));
+				}
 			}
 			else
 			{
-				UC_PrintToChat(client, "You will buy\x04 %s\x03 for Player\x05 %N\x03 in %.1fsec\x03  (Σ: \x05%d\x03)", alteredProduct.sName, targetclient, alteredProduct.fDelay, GetClientPoints(client));
+
+				if(SimplifiedEdition.BoolValue)
+				{
+					UC_PrintToChat(client, "You will buy\x04 %s\x03 for Player\x05 %N\x03 in %.1fsec", alteredProduct.sName, targetclient, alteredProduct.fDelay);
+				}
+				else
+				{
+					UC_PrintToChat(client, "You will buy\x04 %s\x03 for Player\x05 %N\x03 in %.1fsec\x03  (Σ: \x05%d\x03)", alteredProduct.sName, targetclient, alteredProduct.fDelay, GetClientPoints(client));
+				}
+
 				UC_PrintToChat(targetclient, "Player \x05%N \x03will buy you\x04 %s\x03 in %.1fsec", client, alteredProduct.sName, alteredProduct.fDelay);
 			}
 		}
@@ -3574,7 +3674,15 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 	{
 		RemoveDelayedProductByTimer(hTimer);
 		g_fPoints[client] += alteredProduct.fCost;
-		UC_PrintToChat(client, "Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+
+		if(SimplifiedEdition.BoolValue)
+		{
+			UC_PrintToChat(client, "Refunded %s\x05 + %d\x03 points", sFirstArg, RoundToFloor(alteredProduct.fCost));
+		}
+		else
+		{
+			UC_PrintToChat(client, "Refunded %s\x05 + %d\x03 points (Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+		}
 		return Plugin_Stop;
 	}
 
@@ -3599,7 +3707,14 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 				alteredProduct.fNextBuyProduct[targetclient] = 0.0;
 				SetArrayArray(g_aProducts, productPos, product);
 
-				PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+				if(SimplifiedEdition.BoolValue)
+				{
+					PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points", sFirstArg, RoundToFloor(alteredProduct.fCost));
+				}
+				else
+				{
+					PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points (Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+				}
 
 				UC_PrintToChat(client, g_error);
 			}
@@ -3633,7 +3748,14 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 				alteredProduct.fNextBuyProduct[targetclient] = 0.0;
 				SetArrayArray(g_aProducts, productPos, product);
 
-				PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+				if(SimplifiedEdition.BoolValue)
+				{
+					PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points", sFirstArg, RoundToFloor(alteredProduct.fCost));	
+				}
+				else
+				{
+					PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points (Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+				}
 
 				UC_PrintToChat(client, g_error);
 			}
@@ -3691,7 +3813,15 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 		{
 			product.fNextBuyProduct[targetclient] = 0.0;
 			SetArrayArray(g_aProducts, productPos, product);
-			PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+
+			if(SimplifiedEdition.BoolValue)
+			{
+				PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points", sFirstArg, RoundToFloor(alteredProduct.fCost));	
+			}
+			else
+			{
+				PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points (Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+			}
 
 			UC_PrintToChat(client, g_error);
 		}
@@ -3722,7 +3852,15 @@ public Action Timer_DelayGiveProduct(Handle hTimer, DataPack DP)
 		{
 			product.fNextBuyProduct[targetclient] = 0.0;
 			SetArrayArray(g_aProducts, productPos, product);
-			PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points(Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+
+			if(SimplifiedEdition.BoolValue)
+			{
+				PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points", sFirstArg, RoundToFloor(alteredProduct.fCost));	
+			}
+			else
+			{
+				PSAPI_SetErrorByPriority(50, "Refunded %s\x05 + %d\x03 points (Σ: \x05%d\x03)", sFirstArg, RoundToFloor(alteredProduct.fCost), GetClientPoints(client));
+			}
 
 			UC_PrintToChat(client, g_error);
 		}

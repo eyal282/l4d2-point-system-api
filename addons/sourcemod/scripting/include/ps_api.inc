@@ -308,7 +308,7 @@ stock void UC_PrintToChat(int client, const char[] format, any ...)
 	sReplaceFrom[1] = EOS;
 	prefixCvar.GetString(sPrefix, sizeof(sPrefix));
 
-	FormatEx(sReplaceTo, sizeof(sReplaceTo), "{GREEN}{NORMAL}%s%s", sReplaceFrom, sPrefix);
+	FormatEx(sReplaceTo, sizeof(sReplaceTo), "{GREEN}{NORMAL}%s%s", sPrefix, sReplaceFrom);
 	
 	ReplaceStringEx(buffer, sizeof(buffer), sReplaceFrom, sReplaceTo);
 
