@@ -300,7 +300,6 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 			return Plugin_Continue;
 		}
 
-		StripFr
 		int iWeapon = GivePlayerItem(target, sClassname);
 
 		if (iWeapon == -1)

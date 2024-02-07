@@ -1,5 +1,3 @@
-
-
 #include <ps_api>
 #include <sdkhooks>
 #include <sdktools>
@@ -283,7 +281,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 	{
 		if (!(GetEntityFlags(target) & FL_ONFIRE))
 		{
-			PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Error:\x05 You are not on fire!");
+			PSAPI_SetErrorByPriority(50, "Error:\x05 You are not on fire!");
 			return Plugin_Handled;
 		}
 	}
@@ -347,7 +345,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 
 		if(tankCount >= GetConVarInt(TankLimit))
 		{
-			PSAPI_SetErrorByPriority(50, "\x04[PS]\x03 Maximum living Tank limit reached\x04 (\x03%i\x04)", GetConVarInt(TankLimit));
+			PSAPI_SetErrorByPriority(50, "Maximum living Tank limit reached\x04 (\x03%i\x04)", GetConVarInt(TankLimit));
 			return Plugin_Handled;
 		}
 	}
@@ -442,7 +440,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		{
 			witchesinqueue++;
 
-			PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
+			UC_PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
 		}
 	}
 	else if (StrEqual(sInfo, "Terror All Witches Attack"))
@@ -485,7 +483,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 				else if (GetClientTeam(i) != view_as<int>(L4DTeam_Infected))
 					continue;
 
-				PrintToChat(i, "\x04[PS]\x03 %N\x01 invested \x05%d\x03 points to Permanent Uncommon Mob! (\x05%d\x01 / \x05%d \x03)", buyer, RoundToFloor(fCost), RoundToFloor(g_fPermanentUmobInvested), GetConVarInt(PointsPermanentUmob));
+				UC_PrintToChat(i, "%N\x01 invested \x05%d\x03 points to Permanent Uncommon Mob! (\x05%d\x01 / \x05%d \x03)", buyer, RoundToFloor(fCost), RoundToFloor(g_fPermanentUmobInvested), GetConVarInt(PointsPermanentUmob));
 			}
 
 			if(g_fPermanentUmobInvested >= GetConVarFloat(PointsPermanentUmob))

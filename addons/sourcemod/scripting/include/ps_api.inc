@@ -6,7 +6,7 @@
 #include <autoexecconfig>
 #include <left4dhooks>
 
-#define PSAPI_NOT_ENOUGH_POINTS "\x04[PS]\x03 Failed! You need \x05%d\x03 more points to buy it! (Σ: \x05%d\x03)"
+char PSAPI_NOT_ENOUGH_POINTS[256];
 
 stock char g_sSINames[][]={"","Smoker","Boomer","Hunter","Spitter","Jockey","Charger"};
 stock char g_sSIClassnames[][]={"","smoker","boomer","hunter","spitter","jockey","charger"};
@@ -249,6 +249,131 @@ forward Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] info, 
 
 // Stocks
 
+
+char Colors[][] = 
+{
+	"{NORMAL}", "{RED}", "{GREEN}", "{LIGHTGREEN}", "{OLIVE}", "{LIGHTRED}", "{GRAY}", "{YELLOW}", "{ORANGE}", "{BLUE}", "{PINK}"
+};
+
+char ColorEquivalents[][] =
+{
+	"\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x08", "\x09", "\x10", "\x0C", "\x0E"
+};
+
+
+
+stock void UC_ReplyToCommand(int client, const char[] format, any ...)
+{
+	SetGlobalTransTarget(client);
+	char buffer[256];
+
+	VFormat(buffer, sizeof(buffer), format, 3);
+
+	char sReplaceFrom[2], sReplaceTo[32];
+
+	sReplaceFrom[0] = buffer[0]
+	sReplaceFrom[1] = EOS;
+	FormatEx(sReplaceTo, sizeof(sReplaceTo), "{GREEN}{NORMAL}%s", sReplaceFrom);
+	
+	ReplaceStringEx(buffer, sizeof(buffer), sReplaceFrom, sReplaceTo);
+
+	for(int i=0;i < sizeof(Colors);i++)
+	{
+		ReplaceString(buffer, sizeof(buffer), Colors[i], ColorEquivalents[i]);
+	}
+	
+	ReplaceString(buffer, sizeof(buffer), "{PERCENT}", "%%");
+	
+	ReplyToCommand(client, buffer);
+}
+
+stock void UC_PrintToChat(int client, const char[] format, any ...)
+{
+	ConVar prefixCvar = FindConVar("sm_prefix_cvar");
+	
+	if(prefixCvar == null)
+	{
+		prefixCvar = UC_CreateConVar("sm_prefix_cvar", "{LIGHTGREEN}[PS] {GREEN}");
+	}
+
+	SetGlobalTransTarget(client);
+	
+	char buffer[256];
+	
+	VFormat(buffer, sizeof(buffer), format, 3);
+
+	char sReplaceFrom[2], sReplaceTo[32], sPrefix[64];
+
+	sReplaceFrom[0] = buffer[0]
+	sReplaceFrom[1] = EOS;
+	prefixCvar.GetString(sPrefix, sizeof(sPrefix));
+
+	FormatEx(sReplaceTo, sizeof(sReplaceTo), "{GREEN}{NORMAL}%s%s", sReplaceFrom, sPrefix);
+	
+	ReplaceStringEx(buffer, sizeof(buffer), sReplaceFrom, sReplaceTo);
+
+	for(int i=0;i < sizeof(Colors);i++)
+	{
+		ReplaceString(buffer, sizeof(buffer), Colors[i], ColorEquivalents[i]);
+	}
+	
+	ReplaceString(buffer, sizeof(buffer), "{PERCENT}", "%%");
+	
+	PrintToChat(client, buffer);
+}
+
+stock void UC_PrintToChatAll(const char[] format, any ...)
+{	
+	char buffer[256];
+	for(int i=1;i <= MaxClients;i++)
+	{
+		if(!IsClientInGame(i))
+			continue;
+		
+		SetGlobalTransTarget(i);
+		VFormat(buffer, sizeof(buffer), format, 2);
+		
+		UC_PrintToChat(i, buffer);
+	}
+}
+
+stock void UC_StringToUpper(char[] buffer)
+{
+	int length = strlen(buffer);
+	for(int i=0;i < length;i++)
+		buffer[i] = CharToUpper(buffer[i]);
+}
+
+stock void UC_PrintToChatEyal(const char[] format, any...)
+{
+	char buffer[291];
+	VFormat(buffer, sizeof(buffer), format, 2);
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i))
+			continue;
+
+		else if (IsFakeClient(i))
+			continue;
+
+		char steamid[64];
+		GetClientAuthId(i, AuthId_Steam2, steamid, sizeof(steamid));
+
+		if (StrEqual(steamid, "STEAM_1:0:49508144"))
+			UC_PrintToChat(i, buffer);
+	}
+}
+
+stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
+{
+	ConVar hndl = AutoExecConfig_CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
+
+	if (flags & FCVAR_PROTECTED)
+		ServerCommand("sm_cvar protect %s", name);
+
+	return hndl;
+}
+
 // This float is pretty much meant for RPG servers to increase starting points when the starting points default is 0.
 stock float PSAPI_GetAverageProductPrice(L4DTeam team)
 {
@@ -358,19 +483,19 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct alt
 	
 	if(alteredProduct.fCost < 0.0)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Error: This product is disabled!");
+		FormatEx(sError, iLength, "Error: This product is disabled!");
 		bShouldReturn = true;
 		return true;
 	}
 	else if( (iBuyFlags & BUYFLAG_INFECTED != BUYFLAG_INFECTED && iTeam == L4DTeam_Infected) || (!(iBuyFlags & BUYFLAG_SURVIVOR) && iTeam == L4DTeam_Survivor))
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Error: Only %s can buy this!", iBuyFlags & BUYFLAG_SURVIVOR ? "Survivors" : "Infected");
+		FormatEx(sError, iLength, "Error: Only %s can buy this!", iBuyFlags & BUYFLAG_SURVIVOR ? "Survivors" : "Infected");
 		bShouldReturn = true;
 		return true;
 	}
 	else if(!(iBuyFlags & BUYFLAG_TEAM) && target != buyer)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy %s for teammates", alteredProduct.sName);
+		FormatEx(sError, iLength, "Cannot buy %s for teammates", alteredProduct.sName);
 		return true;
 	}
 	else if(PSAPI_GetPoints(buyer) < alteredProduct.fCost)
@@ -397,68 +522,68 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct alt
 	
 	if(!(iBuyFlags & BUYFLAG_HUMANTEAM) && target != buyer && !bBot)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy\x04 %s\x03 for non-bot teammates", alteredProduct.sName);
+		FormatEx(sError, iLength, "Cannot buy\x04 %s\x03 for non-bot teammates", alteredProduct.sName);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_BOTTEAM) && target != buyer && bBot)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 Cannot buy\x04 %s\x03 for bot teammates", alteredProduct.sName);
+		FormatEx(sError, iLength, "Cannot buy\x04 %s\x03 for bot teammates", alteredProduct.sName);
 		return true;
 	}
 	
 
 	else if(!(iBuyFlags & BUYFLAG_INCAP) && bIncap)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be incapped to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
+		FormatEx(sError, iLength, "%s mustn't be incapped to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	else if(iBuyFlags & BUYFLAG_ONLY_INCAP && !bIncap)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be incapped to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
+		FormatEx(sError, iLength, "%s must be incapped to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	else if(!(iBuyFlags & BUYFLAG_GHOST) && bGhost)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be %s to buy\x04 %s", target == buyer ? "You" : sName, iBuyFlags & BUYFLAG_ALIVE ? "alive" : "dead", alteredProduct.sName);
+		FormatEx(sError, iLength, "%s must be %s to buy\x04 %s", target == buyer ? "You" : sName, iBuyFlags & BUYFLAG_ALIVE ? "alive" : "dead", alteredProduct.sName);
 		return true;
 	}
 	else if( ( !(iBuyFlags & BUYFLAG_DEAD_SURVIVORS) && !bAlive && iTeam == L4DTeam_Survivor ) || ( !(iBuyFlags & BUYFLAG_DEAD_INFECTED) && !bAlive && iTeam == L4DTeam_Infected ))
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be alive to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
+		FormatEx(sError, iLength, "%s must be alive to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_ALIVE) && bAlive)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be dead to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
+		FormatEx(sError, iLength, "%s must be dead to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	else if(!(iBuyFlags & BUYFLAG_PINNED) && bPinned)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
+		FormatEx(sError, iLength, "%s mustn't be pinned to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	else if(iBuyFlags & BUYFLAG_ONLY_PINNED && !bPinned)
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s must be pinned to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
+		FormatEx(sError, iLength, "%s must be pinned to buy\x04 %s", target == buyer ? "You" : sName, alteredProduct.sName);
 		return true;
 	}
 	
 	// 10 is a constant created by the fact that BUYFLAG_PINNED_SMOKER = (1<< (L4D2ZombieClass_Smoker + 10))
 	else if(pinningClass != view_as<int>(L4D2ZombieClass_NotInfected) && iBuyFlags & (1<< (10 + pinningClass)) != (1<< (10 + pinningClass)))
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be pinned by a\x05 %s\x03 to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[pinningClass], alteredProduct.sName);
+		FormatEx(sError, iLength, "%s mustn't be pinned by a\x05 %s\x03 to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[pinningClass], alteredProduct.sName);
 		return true;		
 	}
 	else if(!bProperClass)
 	{
 		L4D2ZombieClassType class = L4D2_GetPlayerZombieClass(target);
 		
-		FormatEx(sError, iLength, "\x04[PS]\x03 %s mustn't be a %s to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[class], alteredProduct.sName);
+		FormatEx(sError, iLength, "%s mustn't be a %s to buy\x04 %s", target == buyer ? "You" : sName, g_sBossNames[class], alteredProduct.sName);
 		return true;
 	}
 	
