@@ -183,7 +183,7 @@ public void OnPluginStart()
 
 	infiniteAmmo 		= FindConVar("sv_infinite_ammo");
 
-	AutoExecConfig_CreateConVar("sm_prefix_cvar", "[{OLIVE}PS{NORMAL}] {NORMAL}");
+	AutoExecConfig_CreateConVar("l4d2_points_prefix", "{LIGHTGREEN}[PS] {GREEN}");
 	IReloadAlias        = AutoExecConfig_CreateConVar("l4d2_points_infected_reload_alias", "fheal", "buy alias when infected players use RELOAD.\nSet empty to disable");
 	SReloadAlias        = AutoExecConfig_CreateConVar("l4d2_points_survivor_reload_alias", "fheal", "buy alias when survivor players use RELOAD while sv_infinite_ammo = 1\nSet empty to disable");
 	ISprayAlias			= AutoExecConfig_CreateConVar("l4d2_points_infected_spray_alias", "ghost", "buy alias when infected players use spray button.\nThis disables spray for infected players if the item can be bought alive.\nSet empty to disable");

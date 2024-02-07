@@ -289,11 +289,11 @@ stock void UC_ReplyToCommand(int client, const char[] format, any ...)
 
 stock void UC_PrintToChat(int client, const char[] format, any ...)
 {
-	ConVar prefixCvar = FindConVar("sm_prefix_cvar");
+	ConVar prefixCvar = FindConVar("l4d2_points_prefix");
 	
 	if(prefixCvar == null)
 	{
-		prefixCvar = UC_CreateConVar("sm_prefix_cvar", "{LIGHTGREEN}[PS] {GREEN}");
+		prefixCvar = UC_CreateConVar("l4d2_points_prefix", "{LIGHTGREEN}[PS] {GREEN}");
 	}
 
 	SetGlobalTransTarget(client);
@@ -302,7 +302,7 @@ stock void UC_PrintToChat(int client, const char[] format, any ...)
 	
 	VFormat(buffer, sizeof(buffer), format, 3);
 
-	char sReplaceFrom[2], sReplaceTo[32], sPrefix[64];
+	char sReplaceFrom[2], sReplaceTo[256], sPrefix[128];
 
 	sReplaceFrom[0] = buffer[0]
 	sReplaceFrom[1] = EOS;
