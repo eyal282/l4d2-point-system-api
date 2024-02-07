@@ -60,6 +60,7 @@ int  headshotcount[MAXPLAYERS + 1] = { 0, ... };
 #define ACHECK3  if (attacker > 0 && !IsFakeClient(attacker) && GetClientTeam(attacker) == 3 && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
 #define CCHECK3  if (client > 0 && !IsFakeClient(client) && GetClientTeam(client) == 3 && IsAllowedGameMode() && GetConVarInt(Enable) == 1)
 // Other
+ConVar SimplifiedEdition;
 Handle Enable             = INVALID_HANDLE;
 Handle Modes              = INVALID_HANDLE;
 Handle Notifications      = INVALID_HANDLE;
@@ -112,7 +113,6 @@ ConVar ISpit;
 ConVar ISpitAnnounceDelay;
 ConVar IKill;
 ConVar IKarma;
-
 ConVar ResetPoints;
 ConVar ResetPointsTeamChange;
 ConVar StartPoints;
@@ -191,6 +191,7 @@ public void OnPluginStart()
 	IFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_infected_flashlight_alias", "umob", "buy alias when infected players use spray button.\nSet empty to disable");
 	SFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_survivor_flashlight_alias", "lc", "buy alias when infected players use spray button.\nThis disables flashlight for survivor players.\nSet empty to disable");
 
+	SimplifiedEdition  = AutoExecConfig_CreateConVar("l4d2_points_simplified_edition", "0", "Set to 1 to reduce text bloat");
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
 	BotPriceRatio	   = AutoExecConfig_CreateConVar("l4d2_points_bot_price_ratio", "1.0", "Price ratio when buying for bots. 1.0 = normal price. 2.0 = double price. 0.5 = half price.", _, true, 0.0, true, 5.0);
 	RequestPoints	   = AutoExecConfig_CreateConVar("l4d2_points_request_points", "1", "Enable !rp command?");
@@ -374,10 +375,9 @@ public void KarmaKillSystem_OnKarmaEventPost(int victim, int attacker, const cha
 	{
 		float fPoints = GetConVarFloat(IKarma);
 
-		CalculatePointsGain(attacker, fPoints, "Karma");
-		g_fPoints[attacker] += fPoints;
-
-		UC_PrintToChat(attacker, "\x04[PS]\x01 %s %s'd!!! + \x05%d\x03 points (Σ: \x05%d\x03)", bBird ? "Bird" : "Karma", KarmaName, RoundToFloor(fPoints), GetClientPoints(attacker));
+		char finalKarmaName[32];
+		FormatEx(finalKarmaName, sizeof(finalKarmaName), "%s %s'd!!!", bBird ? "Bird" : "Karma", KarmaName);
+		CalculatePointsGain(attacker, fPoints, finalKarmaName);
 	}
 }
 
@@ -1243,19 +1243,15 @@ public Action Event_Kill(Handle event, const char[] name, bool dontBroadcast)
 		if (headshotcount[attacker] == GetConVarInt(SNumberHead) && GetConVarInt(SValueHeadSpree) > 0)
 		{
 			float fPoints = GetConVarFloat(SValueHeadSpree);
-			CalculatePointsGain(attacker, fPoints, "Multiple Headshots");
-			g_fPoints[attacker] += fPoints;
+			CalculatePointsGain(attacker, fPoints, "Head Hunter");
 			headshotcount[attacker] = 0;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(attacker, "Head Hunter \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(attacker));
 		}
 		killcount[attacker]++;
 		if (killcount[attacker] == GetConVarInt(SNumberKill) && GetConVarInt(SValueKillingSpree) > 0)
 		{
 			float fPoints = GetConVarFloat(SValueKillingSpree);
 			CalculatePointsGain(attacker, fPoints, "Killing Spree");
-			g_fPoints[attacker] += fPoints;
 			killcount[attacker] = 0;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(attacker, "Killing Spree \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(attacker));
 		}
 	}
 
@@ -1270,9 +1266,11 @@ public Action Event_Incap(Handle event, const char[] name, bool dontBroadcast)
 	{
 		if (GetConVarInt(IIncap) == -1) return Plugin_Continue;
 		float fPoints = GetConVarFloat(IIncap);
-		CalculatePointsGain(attacker, fPoints, "Incap Survivor");
-		g_fPoints[attacker] += fPoints;
-		if (GetConVarBool(Notifications)) UC_PrintToChat(attacker, "Incapped \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", userid, RoundToFloor(fPoints), GetClientPoints(attacker));
+
+		char sInfo[64];
+		FormatEx(sInfo, sizeof(sInfo), "Incapped \x01%N", userid);
+
+		CalculatePointsGain(attacker, fPoints, sInfo);
 	}
 
 	return Plugin_Continue;
@@ -1289,18 +1287,20 @@ public Action Event_Death(Handle event, const char[] name, bool dontBroadcast)
 			if (GetConVarInt(SSIKill) <= 0 || GetClientTeam(client) == 2) return Plugin_Continue;
 			if (GetEntProp(client, Prop_Send, "m_zombieClass") == 8) return Plugin_Continue;
 			float fPoints = GetConVarFloat(SSIKill);
-			CalculatePointsGain(attacker, fPoints, "Killed SI");
-			g_fPoints[attacker] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(attacker, "Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, RoundToFloor(fPoints), GetClientPoints(attacker));
+			char sInfo[64];
+			FormatEx(sInfo, sizeof(sInfo), "Killed \x01%N", client);
+
+			CalculatePointsGain(attacker, fPoints, sInfo);
 		}
 		// If headshot == 2 ( which is a boolean usually ) then a karma kill occured.
 		if (GetClientTeam(attacker) == 3 && GetEventInt(event, "headshot") != 2)
 		{
 			if (GetConVarInt(IKill) <= 0 || GetClientTeam(client) == 3) return Plugin_Continue;
 			float fPoints = GetConVarFloat(IKill);
-			CalculatePointsGain(attacker, fPoints, "Killed Survivor");
-			g_fPoints[attacker] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(attacker, "Killed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, RoundToFloor(fPoints), GetClientPoints(attacker));
+			char sInfo[64];
+			FormatEx(sInfo, sizeof(sInfo), "Killed \x01%N", client);
+
+			CalculatePointsGain(attacker, fPoints, sInfo);
 		}
 	}
 
@@ -1316,9 +1316,7 @@ public Action Event_TankDeath(Handle event, const char[] name, bool dontBroadcas
 		if (solo && GetConVarInt(STSolo) > 0)
 		{
 			float fPoints = GetConVarFloat(STSolo);
-			CalculatePointsGain(attacker, fPoints, "Tank Solo");
-			g_fPoints[attacker] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(attacker, "TANK SOLO! \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(attacker));
+			CalculatePointsGain(attacker, fPoints, "TANK SOLO!");
 		}
 	}
 	for (int i = 1; i <= MaxClients; i++)
@@ -1327,8 +1325,6 @@ public Action Event_TankDeath(Handle event, const char[] name, bool dontBroadcas
 		{
 			float fPoints = GetConVarFloat(STankKill);
 			CalculatePointsGain(i, fPoints, "Killed Tank");
-			g_fPoints[i] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(i, "Killed Tank \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(i));
 		}
 	}
 	tankburning[attacker] = 0;
@@ -1347,16 +1343,12 @@ public Action Event_WitchDeath(Handle event, const char[] name, bool dontBroadca
 		if (oneshot && GetConVarInt(SWitchCrown) > 0)
 		{
 			float fPoints = GetConVarFloat(SWitchCrown);
-			CalculatePointsGain(client, fPoints, "Crowned Witch");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Crowned The Witch + \x05%d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
+			CalculatePointsGain(client, fPoints, "Crowned The Witch");
 		}
 		else
 		{
 			float fPoints = GetConVarFloat(SWitchKill);
 			CalculatePointsGain(client, fPoints, "Killed Witch");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Killed Witch + \x05%d\x03 points (Σ: \x05%d\x03)", GetConVarInt(SWitchKill), GetClientPoints(client));
 		}
 	}
 	witchburning[client] = 0;
@@ -1376,17 +1368,16 @@ public Action Event_Heal(Handle event, const char[] name, bool dontBroadcast)
 		{
 			if (GetConVarInt(SHeal) <= 0) return Plugin_Continue;
 			float fPoints = GetConVarFloat(SHeal);
-			CalculatePointsGain(client, fPoints, "Healed Teammate");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Healed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, RoundToFloor(fPoints), GetClientPoints(client));
+			char sInfo[64];
+			FormatEx(sInfo, sizeof(sInfo), "Healed \x01%N", subject);
+
+			CalculatePointsGain(client, fPoints, sInfo);
 		}
 		else
 		{
 			if (GetConVarInt(SHealWarning) <= 0) return Plugin_Continue;
 			float fPoints = GetConVarFloat(SHealWarning);
-			CalculatePointsGain(client, fPoints, "Healed Teammate Warning");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Don't Harvest Heal Points\x05 + %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
+			CalculatePointsGain(client, fPoints, "Don't Harvest Heal Points");
 		}
 	}
 
@@ -1404,10 +1395,7 @@ public Action Event_Protect(Handle event, const char[] name, bool dontBroadcast)
 		if (protectcount[client] == GetConVarInt(SNumberProtect))
 		{
 			float fPoints = GetConVarFloat(SProtect);
-			CalculatePointsGain(client, fPoints, "Protected Teammate");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "%sProtection\x05 + %d\x03 points (Σ: \x05%d\x03)", protectcount[client] > 1 ? "Multiple " : "", RoundToFloor(fPoints), GetClientPoints(client));
-			protectcount[client] = 0;
+			CalculatePointsGain(client, fPoints, "Protection");
 		}
 	}
 
@@ -1425,16 +1413,18 @@ public Action Event_Revive(Handle event, const char[] name, bool dontBroadcast)
 		if (!ledge && GetConVarInt(SRevive) > 0)
 		{
 			float fPoints = GetConVarFloat(SRevive);
-			CalculatePointsGain(client, fPoints, "Revived Teammate");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Revived \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, RoundToFloor(fPoints), GetClientPoints(client));
+			char sInfo[64];
+			FormatEx(sInfo, sizeof(sInfo), "Revived \x01%N", subject);
+
+			CalculatePointsGain(client, fPoints, sInfo);
 		}
 		if (ledge && GetConVarInt(SLedge) > 0)
 		{			
 			float fPoints = GetConVarFloat(SLedge);
-			CalculatePointsGain(client, fPoints, "Revived Teammate From Ledge");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Revived \x01%N\x03 From Ledge\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, RoundToFloor(fPoints), GetClientPoints(client));
+			char sInfo[64];
+			FormatEx(sInfo, sizeof(sInfo), "Revived \x01%N\x03 From Ledge", subject);
+
+			CalculatePointsGain(client, fPoints, sInfo);
 		}
 	}
 
@@ -1449,9 +1439,10 @@ public Action Event_Shock(Handle event, const char[] name, bool dontBroadcast)
 	{
 		if (GetConVarInt(SDefib) <= 0) return Plugin_Continue;
 		float fPoints = GetConVarFloat(SDefib);
-		CalculatePointsGain(client, fPoints, "Defib Teammate");
-		g_fPoints[client] += fPoints;
-		if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Defibbed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", subject, RoundToFloor(fPoints), GetClientPoints(client));
+		char sInfo[64];
+		FormatEx(sInfo, sizeof(sInfo), "Defibbed \x01%N", subject);
+
+		CalculatePointsGain(client, fPoints, sInfo);
 	}
 
 	return Plugin_Continue;
@@ -1465,8 +1456,6 @@ public Action Event_Choke(Handle event, const char[] name, bool dontBroadcast)
 		if (GetConVarInt(IChoke) <= 0) return Plugin_Continue;
 		float fPoints = GetConVarFloat(IChoke);
 		CalculatePointsGain(client, fPoints, "Choked Survivor");
-		g_fPoints[client] += fPoints;
-		if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Choked Survivor\x05 + %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
 	}
 
 	return Plugin_Continue;
@@ -1481,16 +1470,15 @@ public Action Event_Boom(Handle event, const char[] name, bool dontBroadcast)
 		if (GetClientTeam(attacker) == 3 && GetConVarInt(ITag) > 0)
 		{
 			float fPoints = GetConVarFloat(ITag);
-			CalculatePointsGain(attacker, fPoints, "Biled Survivor");
-			g_fPoints[attacker] += fPoints;
-			if (GetClientTeam(client) == 2 && GetConVarBool(Notifications)) UC_PrintToChat(attacker, "Boomed \x01%N\x05 + %d\x03 points (Σ: \x05%d\x03)", client, RoundToFloor(fPoints), GetClientPoints(attacker));
+			char sInfo[64];
+			FormatEx(sInfo, sizeof(sInfo), "Boomed \x01%N", client);
+
+			CalculatePointsGain(attacker, fPoints, sInfo);
 		}
 		if (GetClientTeam(attacker) == 2 && GetConVarInt(STag) > 0)
 		{
 			float fPoints = GetConVarFloat(STag);
 			CalculatePointsGain(attacker, fPoints, "Biled Tank");
-			g_fPoints[attacker] += fPoints;
-			if (GetClientTeam(client) == 3 && GetEntProp(client, Prop_Send, "m_zombieClass") == 8 && GetConVarBool(Notifications)) UC_PrintToChat(attacker, "Biled Tank + \x05%d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(attacker));
 		}
 	}
 
@@ -1505,8 +1493,6 @@ public Action Event_Pounce(Handle event, const char[] name, bool dontBroadcast)
 		if (GetConVarInt(IPounce) <= 0) return Plugin_Continue;
 		float fPoints = GetConVarFloat(IPounce);
 		CalculatePointsGain(client, fPoints, "Pounced Survivor");
-		g_fPoints[client] += fPoints;
-		if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Pounced Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
 	}
 
 	return Plugin_Continue;
@@ -1520,8 +1506,6 @@ public Action Event_Ride(Handle event, const char[] name, bool dontBroadcast)
 		if (GetConVarInt(IRide) <= 0) return Plugin_Continue;
 		float fPoints = GetConVarFloat(IRide);
 		CalculatePointsGain(client, fPoints, "Jockeyed Survivor");
-		g_fPoints[client] += fPoints;
-		if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Jockeyed Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
 	}
 
 	return Plugin_Continue;
@@ -1535,8 +1519,6 @@ public Action Event_Carry(Handle event, const char[] name, bool dontBroadcast)
 		if (GetConVarInt(ICarry) <= 0) return Plugin_Continue;
 		float fPoints = GetConVarFloat(ICarry);
 		CalculatePointsGain(client, fPoints, "Charged Survivor");
-		g_fPoints[client] += fPoints;
-		if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Charged Survivor \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
 	}
 
 	return Plugin_Continue;
@@ -1550,8 +1532,6 @@ public Action Event_Impact(Handle event, const char[] name, bool dontBroadcast)
 		if (GetConVarInt(IImpact) <= 0) return Plugin_Continue;
 		float fPoints = GetConVarFloat(IImpact);
 		CalculatePointsGain(client, fPoints, "Impacted Survivor");
-		g_fPoints[client] += fPoints;
-		if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Impacted Survivor \x05+ %d\x03 points(Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
 	}
 
 	return Plugin_Continue;
@@ -1567,17 +1547,13 @@ public Action Event_Burn(Handle event, const char[] name, bool dontBroadcast)
 		if (StrEqual(victim, "Tank", false) && tankburning[client] == 0 && GetConVarInt(STBurn) > 0)
 		{
 			float fPoints = GetConVarFloat(STBurn);
-			CalculatePointsGain(client, fPoints, "Burned Tank");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Burned The Tank \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
+			CalculatePointsGain(client, fPoints, "Burned The Tank");
 			tankburning[client] = 1;
 		}
 		if (StrEqual(victim, "Witch", false) && witchburning[client] == 0 && GetConVarInt(SWBurn) > 0)
 		{
 			float fPoints = GetConVarFloat(SWBurn);
 			CalculatePointsGain(client, fPoints, "Burned Witch");
-			g_fPoints[client] += fPoints;
-			if (GetConVarBool(Notifications)) UC_PrintToChat(client, "Burned The Witch \x05+ %d\x03 points (Σ: \x05%d\x03)", RoundToFloor(fPoints), GetClientPoints(client));
 			witchburning[client] = 1;
 		}
 	}
@@ -1602,12 +1578,12 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 				NextSpitterDamage[attacker] = GetEngineTime() + GetConVarFloat(ISpitAnnounceDelay);
 
 			float fPoints = GetConVarFloat(ISpit) * SPIT_DELAY;
-			CalculatePointsGain(attacker, fPoints, "Acid Damage");
-			g_fPoints[attacker] += fPoints;
+			
 
+			CalculatePointsGain(attacker, fPoints, "Acid Damage");
 			if(GetConVarFloat(ISpitAnnounceDelay) == 0.0 && GetConVarBool(Notifications))
 			{
-				UC_PrintToChat(attacker, "Acid Damage + \x05%d\x03 points *\x05 %.1fsec\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", RoundToFloor(fPoints / SpitterDamageStack[attacker]), SpitterDamageStack[attacker], fPoints, GetClientPoints(attacker));
+				//UC_PrintToChat(attacker, "Acid Damage + \x05%d\x03 points *\x05 %.1fsec\x03 =\x05 %d\x03 (Σ: \x05%d\x03)", RoundToFloor(fPoints / SpitterDamageStack[attacker]), SpitterDamageStack[attacker], fPoints, GetClientPoints(attacker));
 			}
 			else
 			{
@@ -1624,14 +1600,16 @@ public Action Event_Hurt(Handle event, const char[] name, bool dontBroadcast)
 			if (hurtcount[attacker] >= GetConVarInt(INumberHurt))
 			{
 				float fPoints = GetConVarFloat(IHurt);
-				CalculatePointsGain(attacker, fPoints, "Multiple Damage");
-				g_fPoints[attacker] += fPoints;
 
-				if(GetConVarFloat(IHurtAnnounceDelay) == 0.0 && GetConVarBool(Notifications))
-				{
-					UC_PrintToChat(attacker, "%sDamage + \x05%d\x03 points (Σ: \x05%d\x03)", GetConVarInt(INumberHurt) == 1 ? "Inflicted " : "Multiple ", RoundToFloor(fPoints), GetClientPoints(attacker));
-				}
-				else
+				char sInfo[64];
+				FormatEx(sInfo, sizeof(sInfo), "%sDamage", GetConVarInt(INumberHurt) == 1 ? "Inflicted " : "Multiple ");
+
+				if(GetConVarFloat(IHurtAnnounceDelay) != 0.0)
+					sInfo[0] = EOS;
+
+				CalculatePointsGain(attacker, fPoints, sInfo);
+
+				if(GetConVarFloat(IHurtAnnounceDelay) != 0.0 && GetConVarBool(Notifications))
 				{
 					MultipleDamageStack[attacker] += fPoints;
 					hurtcount[attacker] = 0;
@@ -3145,7 +3123,7 @@ void ShowConfirmPurchaseMenu(int client, char[] sFirstArg)
 
 	Call_Finish();
 
-	if (alteredProduct.sDescription[0] != EOS)
+	if (alteredProduct.sDescription[0] != EOS && !SimplifiedEdition.BoolValue)
 		SetMenuTitle(hMenu, "%s\nCost: %i\nDescription: %s\nYour Points: %i", alteredProduct.sName, RoundToFloor(alteredProduct.fCost), alteredProduct.sDescription, GetClientPoints(client));
 
 	else
@@ -3986,6 +3964,20 @@ stock void CalculatePointsGain(int attacker, float &fPoints, const char[] reason
 	Call_PushString(reason);
 
 	Call_Finish();
+
+	g_fPoints[attacker] += fPoints;
+
+	if (GetConVarBool(Notifications) && reason[0] != EOS)
+	{
+		if(SimplifiedEdition.BoolValue)
+		{
+			UC_PrintToChat(attacker, "%s \x05+ %d\x03 points", reason, RoundToFloor(fPoints));
+		}
+		else
+		{
+			UC_PrintToChat(attacker, "%s \x05+ %d\x03 points (Σ: \x05%d\x03)", reason, RoundToFloor(fPoints), GetClientPoints(attacker));
+		}
+	}
 }
 
 stock bool HandleBuyBind(int client, const char[] sAlias)
