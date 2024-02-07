@@ -296,7 +296,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 			{
 				if ((!(GetEntityFlags(target) & FL_ONGROUND)))
 				{
-					PSAPI_SetErrorByPriority(50, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself until you reach the ground as a Charger.");
+					PSAPI_SetErrorByPriority(50, "You cannot kill yourself until you reach the ground as a Charger.");
 					return Plugin_Handled;
 				}
 			}
@@ -310,7 +310,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 			{
 				if (IsDoubleCharged(iAnyVictim))
 				{
-					PSAPI_SetErrorByPriority(50, "\x04[PS-Anti Exploit]\x03 You cannot kill yourself when pinning a double-charged survivor.");
+					PSAPI_SetErrorByPriority(50, "You cannot kill yourself when pinning a double-charged survivor.");
 					return Plugin_Handled;
 				}
 			}

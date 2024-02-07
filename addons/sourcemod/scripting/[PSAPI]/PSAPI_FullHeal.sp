@@ -164,7 +164,7 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 			}
 			else if (L4D_IsPlayerIncapacitated(target))
 			{
-				PSAPI_SetErrorByPriority(50, "\x04[PS-Anti Exploit]\x03 You cannot heal yourself as a dying tank.");
+				PSAPI_SetErrorByPriority(50, "You cannot heal yourself as a dying tank.");
 				return Plugin_Handled;
 			}
 		}
