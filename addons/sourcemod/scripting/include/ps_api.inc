@@ -6,7 +6,7 @@
 #include <autoexecconfig>
 #include <left4dhooks>
 
-char PSAPI_NOT_ENOUGH_POINTS[256];
+#define PSAPI_NOT_ENOUGH_POINTS "\x04[PS]\x03 Failed! You need \x05%d\x03 more points to buy it! (Σ: \x05%d\x03)"
 
 stock char g_sSINames[][]={"","Smoker","Boomer","Hunter","Spitter","Jockey","Charger"};
 stock char g_sSIClassnames[][]={"","smoker","boomer","hunter","spitter","jockey","charger"};
@@ -29,7 +29,7 @@ enum struct enProduct
 	int iBuyFlags; // Must use variable that determines flags that specify when you can buy. BUYFLAG_* in PSAPI_api.inc
 	char sName[64]; // Product Name
 	char sDescription[512]; // Optional Description
-	char sAliases[256]; // Alises, seperated by spaces, to buy directly with !buy <alias>
+	char sAliases[256]; // Aliases, seperated by spaces, to buy directly with !buy <alias>
 	char sInfo[256]; // Info that only devs can see.
 
 	float fDelay; // Delay between purchase to obtaining the product.
@@ -118,7 +118,9 @@ native ArrayList PSAPI_GetProducts();
 // Using a negative priority will not set the error, so cvars that deal with priority have an easy way to delete the error.
 native Action PSAPI_SetErrorByPriority(int priority, char[] error, any ...);
 
-// Creates or edits a category.
+// Creates or edits a category ( edits by sID).
+// If a category is unavailable to us, but it has available products, they will go to main menu.
+// iCategory is parent category, or -1 if this category is child of main buy menu.
 // Not all buy flags work with categories, check BUYFLAG_* for more info.
 // sID is an identifier that is not shared to the player.
 native int PSAPI_CreateCategory(int iCategory, char[] sID, char[] sName, int iBuyFlags);
@@ -301,6 +303,10 @@ stock void UC_PrintToChat(int client, const char[] format, any ...)
 	char buffer[256];
 	
 	VFormat(buffer, sizeof(buffer), format, 3);
+	
+	// This line may do more harm than good.
+	if(buffer[0] == EOS)
+		return;
 
 	char sReplaceFrom[2], sReplaceTo[256], sPrefix[128];
 
@@ -318,6 +324,15 @@ stock void UC_PrintToChat(int client, const char[] format, any ...)
 	}
 	
 	ReplaceString(buffer, sizeof(buffer), "{PERCENT}", "%%");
+
+	int pos = StrContains(buffer, "Σ");
+
+	ConVar Simplified = FindConVar("l4d2_points_simplified_edition");
+
+	if(pos != -1 && Simplified != null && Simplified.BoolValue)
+	{
+		buffer[pos - 3] = EOS;
+	}
 	
 	PrintToChat(client, buffer);
 }
@@ -453,19 +468,19 @@ stock float PSAPI_GetTeamPoints(L4DTeam team, bool bAliveOnly)
 }
 stock void PSAPI_ExecuteCheatCommand(int client, const char[] command, any ...)
 {
+	char formattedCommand[256];
+	
+	VFormat(formattedCommand, sizeof(formattedCommand), command, 3);
+
 	char sFirstArg[64];
 	
-	BreakString(command, sFirstArg, sizeof(sFirstArg));
+	BreakString(formattedCommand, sFirstArg, sizeof(sFirstArg));
 	
 	int flags = GetCommandFlags(sFirstArg);
 
 	SetCommandFlags(sFirstArg, flags & ~FCVAR_CHEAT);
 	
-	char formattedCommand[256];
-	
-	VFormat(formattedCommand, sizeof(formattedCommand), command, 3);
-	
-	FakeClientCommand(client, command);
+	FakeClientCommand(client, formattedCommand);
 	
 	SetCommandFlags(sFirstArg, flags);
 }

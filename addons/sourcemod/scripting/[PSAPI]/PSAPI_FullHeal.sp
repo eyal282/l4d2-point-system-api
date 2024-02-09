@@ -263,7 +263,7 @@ public void CreateProducts()
 	if(!LibraryExists("PointSystemAPI"))
 		return;
 
-	int iCategory = PSAPI_CreateCategory(-1, "health products", "Health Products", BUYFLAG_ALL_TEAMS | BUYFLAG_ALIVE | BUYFLAG_PINNED);
+	int iCategory = PSAPI_CreateCategory(-1, "health products", "Health Products", BUYFLAG_SURVIVOR | BUYFLAG_ALIVE | BUYFLAG_PINNED);
 
 	if (GetConVarFloat(g_hBoomerRatioCost) == GetConVarFloat(g_hSpitterRatioCost))
 	{

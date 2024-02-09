@@ -9,30 +9,32 @@
 #define PLUGIN_VERSION "1.0"
 
 ConVar g_hCommonLimit;
+ArrayList g_aWitchQueue;
 int    ucommonleft;
 int    jimmiesleft;
-int    witchesinqueue;
 float g_fPermanentUmobInvested;
 
-Handle PointsSuicide           = INVALID_HANDLE;
-Handle PointsExtinguish        = INVALID_HANDLE;
-Handle PointsExtinguishTank    = INVALID_HANDLE;
-Handle PointsMinInstantRespawn = INVALID_HANDLE;
-Handle PointsHunter            = INVALID_HANDLE;
-Handle PointsJockey            = INVALID_HANDLE;
-Handle PointsSmoker            = INVALID_HANDLE;
-Handle PointsCharger           = INVALID_HANDLE;
-Handle PointsBoomer            = INVALID_HANDLE;
-Handle PointsSpitter           = INVALID_HANDLE;
-Handle PointsWitch             = INVALID_HANDLE;
-Handle PointsTank              = INVALID_HANDLE;
-Handle PointsHorde             = INVALID_HANDLE;
-Handle PointsUmob              = INVALID_HANDLE;
-Handle PointsJmob              = INVALID_HANDLE;
-Handle PointsPermanentUmob              = INVALID_HANDLE;
-Handle PointsTerrorPerWitch    = INVALID_HANDLE;
-Handle WitchLimit              = INVALID_HANDLE;
-Handle TankLimit              = INVALID_HANDLE;
+ConVar SuicideTankReplace;
+ConVar DisableGhostSpawn;
+ConVar PointsSuicide;
+ConVar PointsExtinguish;
+ConVar PointsExtinguishTank;
+ConVar PointsMinInstantRespawn;
+ConVar PointsHunter;
+ConVar PointsJockey;
+ConVar PointsSmoker;
+ConVar PointsCharger;
+ConVar PointsBoomer;
+ConVar PointsSpitter;
+ConVar PointsWitch;
+ConVar PointsTank;
+ConVar PointsHorde;
+ConVar PointsUmob;
+ConVar PointsJmob;
+ConVar PointsPermanentUmob;
+ConVar PointsTerrorPerWitch;
+ConVar WitchLimit;
+ConVar TankLimit;
 
 char g_sUncommonModels[][] = {
 	"models/infected/common_male_riot.mdl",
@@ -55,10 +57,14 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
+	g_aWitchQueue = new ArrayList(3);
+
 	AutoExecConfig_SetFile("PointSystemAPI_Infected");
 
 	g_hCommonLimit = FindConVar("z_common_limit");
 
+	SuicideTankReplace       = AutoExecConfig_CreateConVar("l4d2_points_suicide_tank_replace_with_bot", "1", "0 - Buying kill as Tank kills you. 1 - Buying kill as Tank replaces you with a bot.");
+	DisableGhostSpawn       = AutoExecConfig_CreateConVar("l4d2_points_ghost_spawn_disabled", "0", "0 - Ghost Spawn Enbaled. 1 - Ghost Spawn Disabled.");
 	PointsSuicide           = AutoExecConfig_CreateConVar("l4d2_points_suicide", "4", "How many points does suicide cost");
 	PointsExtinguish        = AutoExecConfig_CreateConVar("l4d2_points_extinguish", "-1", "How many points does extinguish cost");
 	PointsExtinguishTank    = AutoExecConfig_CreateConVar("l4d2_points_extinguish_tank", "-1", "How many points does tank extinguish cost? Or -1 to disable");
@@ -116,19 +122,17 @@ public void OnMapStart()
 
 public Action Timer_CheckWitchCount(Handle hTimer)
 {
-	if (witchesinqueue <= 0)
+	if (g_aWitchQueue.Length == 0)
 		return Plugin_Continue;
 
 	else if (L4D2_GetWitchCount() >= GetConVarInt(WitchLimit))
 		return Plugin_Continue;
 
-	int client = GetRandomInfected(-1, 0);
+	float fOrigin[3];
+	g_aWitchQueue.GetArray(0, fOrigin, sizeof(fOrigin));
+	g_aWitchQueue.Erase(0);
 
-	if (client == 0)
-		return Plugin_Continue;
-
-	PSAPI_ExecuteCheatCommand(client, "z_spawn_old witch auto");
-	witchesinqueue--;
+	L4D2_SpawnWitch(fOrigin, view_as<float>({0.0, 0.0, 0.0}));
 
 	return Plugin_Continue;
 }
@@ -245,26 +249,41 @@ public Action PointSystemAPI_OnGetParametersProduct(int buyer, const char[] sAli
 		if (ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 1", "") == -1)
 			ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 0", "");
 
-		if (bNoPick)
+
+		if(DisableGhostSpawn.BoolValue)
 		{
 			if (minCountForRespawn >= MAXPLAYERS)
 			{
-				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nDisables zombie class selector.", sClassname);
+				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a %s", sClassname);
 			}
 			else
 			{
-				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nDisables zombie class selector.\nInstant spawn if infected count is <= %i", sClassname, minCountForRespawn);
+				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a %s\nInstant spawn if infected count is <= %i", sClassname, minCountForRespawn);
 			}
 		}
 		else
 		{
-			if (minCountForRespawn >= MAXPLAYERS)
+			if (bNoPick)
 			{
-				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nEnables zombie class selector by identical cost to !buy ghost.", sClassname);
+				if (minCountForRespawn >= MAXPLAYERS)
+				{
+					FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nDisables zombie class selector.", sClassname);
+				}
+				else
+				{
+					FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nDisables zombie class selector.\nInstant spawn if infected count is <= %i", sClassname, minCountForRespawn);
+				}
 			}
 			else
 			{
-				FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nEnables zombie class selector by identical cost to !buy ghost.\nInstant spawn if infected count is <= %i", sClassname, minCountForRespawn);
+				if (minCountForRespawn >= MAXPLAYERS)
+				{
+					FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nEnables zombie class selector by identical cost to !buy ghost.", sClassname);
+				}
+				else
+				{
+					FormatEx(sDescription, sizeof(enProduct::sDescription), "Respawn as a ghost %s.\nEnables zombie class selector by identical cost to !buy ghost.\nInstant spawn if infected count is <= %i", sClassname, minCountForRespawn);
+				}
 			}
 		}
 	}
@@ -422,6 +441,11 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		if (ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 1", "") == -1)
 			ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 0", "");
 
+		if(DisableGhostSpawn.BoolValue)
+		{
+			PSAPI_ExecuteCheatCommand(target, "z_spawn %s auto", sClassname);
+			return Plugin_Continue;
+		}
 		PSAPI_SpawnInfectedBossByClassname(target, sClassname, true, bNoPick);
 
 		return Plugin_Continue;
@@ -434,13 +458,14 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 	{
 		if (L4D2_GetWitchCount() < GetConVarInt(WitchLimit))
 		{
-			PSAPI_ExecuteCheatCommand(target, "z_spawn_old witch auto");
+			PSAPI_ExecuteCheatCommand(target, "z_spawn witch auto");
 		}
 		else
 		{
-			witchesinqueue++;
+			return Plugin_Handled;
+			//g_aWitchQueue.PushArray()
 
-			UC_PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
+			//UC_PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
 		}
 	}
 	else if (StrEqual(sInfo, "Terror All Witches Attack"))
@@ -501,7 +526,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 	}
 	else if (StrEqual(sInfo, "Infected Suicide", false))
 	{
-		if (L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank)
+		if (L4D2_GetPlayerZombieClass(target) == L4D2ZombieClass_Tank && SuicideTankReplace.BoolValue)
 			L4D_ReplaceWithBot(target);
 
 		else
@@ -598,6 +623,9 @@ stock void SetPlayerLifeState(int client, bool ready)
 
 stock float CalculateGhostPrice()
 {
+	if(DisableGhostSpawn.BoolValue)
+		return -1.0;
+
 	float HighestCost = 0.0;
 
 	if (HighestCost < GetConVarFloat(PointsHunter))

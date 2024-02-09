@@ -62,6 +62,7 @@ int  headshotcount[MAXPLAYERS + 1] = { 0, ... };
 // Other
 Handle Enable             = INVALID_HANDLE;
 ConVar TeamBuy;
+ConVar MinCategorySize;
 ConVar SimplifiedEdition;
 Handle Modes              = INVALID_HANDLE;
 Handle Notifications      = INVALID_HANDLE;
@@ -193,6 +194,7 @@ public void OnPluginStart()
 	SFlashlightAlias	= AutoExecConfig_CreateConVar("l4d2_points_survivor_flashlight_alias", "lc", "buy alias when infected players use spray button.\nThis disables flashlight for survivor players.\nSet empty to disable");
 
 	TeamBuy  		   = AutoExecConfig_CreateConVar("l4d2_points_team_buy", "1", "Whether you can buy for team");
+	MinCategorySize    = AutoExecConfig_CreateConVar("l4d2_points_min_category_size", "2", "A category must contain this many products to form");
 	SimplifiedEdition  = AutoExecConfig_CreateConVar("l4d2_points_simplified_edition", "0", "Set to 1 to reduce text bloat");
 	StartPoints        = AutoExecConfig_CreateConVar("l4d2_points_start", "0", "Points to start each round/map with.");
 	BotPriceRatio	   = AutoExecConfig_CreateConVar("l4d2_points_bot_price_ratio", "1.0", "Price ratio when buying for bots. 1.0 = normal price. 2.0 = double price. 0.5 = half price.", _, true, 0.0, true, 5.0);
@@ -202,7 +204,7 @@ public void OnPluginStart()
 	Enable             = AutoExecConfig_CreateConVar("l4d2_points_enable", "1", "Enable Point System?");
 	Modes              = AutoExecConfig_CreateConVar("l4d2_points_modes", "coop,realism,versus,teamversus,survival", "Which game modes to use Point System");
 	ResetPoints        = AutoExecConfig_CreateConVar("l4d2_points_reset_mapchange", "versus,teamversus", "Which game modes to reset point count on round end and round start");
-	ResetPointsTeamChange        = AutoExecConfig_CreateConVar("l4d2_points_reset_teamchange", "", "Which game modes to reset point count on team change");
+	ResetPointsTeamChange 	 = AutoExecConfig_CreateConVar("l4d2_points_reset_teamchange", "", "Which game modes to reset point count on team change");
 	SValueKillingSpree = AutoExecConfig_CreateConVar("l4d2_points_cikill_value", "2", "How many points does killing a certain amount of infected earn");
 	SNumberKill        = AutoExecConfig_CreateConVar("l4d2_points_cikills", "25", "How many kills you need to earn a killing spree bounty");
 	SValueHeadSpree    = AutoExecConfig_CreateConVar("l4d2_points_headshots_value", "4", "How many points does killing a certain amount of infected with headshots earn");
@@ -425,7 +427,7 @@ public Action CheckMultipleDamage(Handle hTimer, any number)
 
 			if(SimplifiedEdition.BoolValue)
 			{
-				UC_PrintToChat(i, "%sDamage + \x05%d\x03 points *\x05 %dx\x03 =\x05 %d", GetConVarInt(INumberHurt) == 1 ? "Inflicted " : "Multiple ", GetConVarInt(IHurt), RoundToFloor(MultipleDamageStack[i] / GetConVarFloat(IHurt)), RoundToFloor(MultipleDamageStack[i]));
+				UC_PrintToChat(i, "%sDamage + \x05%d\x03 points", GetConVarInt(INumberHurt) == 1 ? "Inflicted " : "Multiple ", GetConVarInt(IHurt), RoundToFloor(MultipleDamageStack[i] / GetConVarFloat(IHurt)), RoundToFloor(MultipleDamageStack[i]));
 			}
 			else
 			{
@@ -578,8 +580,9 @@ public any Native_CreateCategory(Handle plugin, int numParams)
 	int iCategory = FindCategoryByIdentifier(cat.sID);
 
 	if (iCategory == -1)
+	{
 		return PushArrayArray(g_aCategories, cat);
-
+	}
 	else
 	{
 		SetArrayArray(g_aCategories, iCategory, cat);
@@ -967,7 +970,7 @@ public Action Event_ChangeTeam(Handle event, const char[] name, bool dontBroadca
 	else if (oldteam == 3)
 		g_fSavedInfectedPoints[client] = g_fPoints[client];
 
-	if(ResetPointsTeamChange.BoolValue)
+	if(IsAllowedResetOnTeamChange())
 	{
 		g_fSavedSurvivorPoints[client] = 0.0;	
 		g_fSavedInfectedPoints[client] = 0.0;
@@ -1093,6 +1096,14 @@ stock bool IsAllowedReset()
 	char gamemode[24], gamemodeactive[64];
 	GetConVarString(FindConVar("mp_gamemode"), gamemode, sizeof(gamemode));
 	GetConVarString(ResetPoints, gamemodeactive, sizeof(gamemodeactive));
+	return (StrContains(gamemodeactive, gamemode, false) != -1);
+}
+
+stock bool IsAllowedResetOnTeamChange()
+{
+	char gamemode[24], gamemodeactive[64];
+	GetConVarString(FindConVar("mp_gamemode"), gamemode, sizeof(gamemode));
+	GetConVarString(ResetPointsTeamChange, gamemodeactive, sizeof(gamemodeactive));
 	return (StrContains(gamemodeactive, gamemode, false) != -1);
 }
 
@@ -2020,12 +2031,27 @@ public Action Command_Aliases(int client, int args)
 
 public Action BuyMenu(int client, int args)
 {
-	if (!L4D_HasAnySurvivorLeftSafeAreaStock() && GetClientTeam(client) == view_as<int>(L4DTeam_Infected))
+	if(client == 0)
+	{
+		ReplyToCommand(client, "Only players can use this command.");
+		return Plugin_Handled;
+	}
+	else if(!IsAllowedGameMode() || !GetConVarBool(Enable))
+	{
+		UC_PrintToChat(client, "Buy Menu is disabled for this gamemode");
+		return Plugin_Handled;
+	}
+	else if(GetClientTeam(client) <= 1)
+	{
+		UC_PrintToChat(client, "You cannot use Buy Menu as Spectator.");
+		return Plugin_Handled;
+	}
+	else if (!L4D_HasAnySurvivorLeftSafeAreaStock() && GetClientTeam(client) == view_as<int>(L4DTeam_Infected))
 	{
 		UC_PrintToChat(client, "Waiting for Survivors ...");
 		return Plugin_Handled;
 	}
-	if (IsAllowedGameMode() && GetConVarInt(Enable) == 1 && IsClientInGame(client) && IsClientConnected(client) && GetClientTeam(client) > 1 && args == 0)
+	else if (args == 0)
 	{
 		BuildBuyMenu(client);
 		return Plugin_Handled;
@@ -2907,7 +2933,7 @@ void BuildBuyMenu(int client, int iCategory = -1)
 	}
 
 	Handle hMenu = CreateMenu(BuyMenu_Handler);
-	SetMenuTitle(hMenu, "Your Points: %i\nUse sm_ps for help about Point System", GetClientPoints(client));
+	SetMenuTitle(hMenu, "Your Points: %i%s", GetClientPoints(client), SimplifiedEdition.BoolValue ? "" : "\nUse sm_ps for help about Point System");
 
 	if (iCategory != -1)
 		SetMenuExitBackButton(hMenu, true);
@@ -2929,6 +2955,9 @@ void BuildBuyMenu(int client, int iCategory = -1)
 		GetArrayArray(aCategories, i, cat);
 
 		if (cat.iCategory != iCategory)
+			continue;
+
+		else if(GetCategorySize(cat, client) < MinCategorySize.IntValue)
 			continue;
 
 		enProduct impostorProduct;
@@ -2974,7 +3003,19 @@ void BuildBuyMenu(int client, int iCategory = -1)
 		enProduct product;
 		GetArrayArray(aProducts, i, product);
 
-		if (product.iCategory != iCategory)
+		int prodCategory = product.iCategory;
+
+		if(product.iCategory != -1)
+		{
+			enCategory cat;
+			GetArrayArray(g_aCategories, product.iCategory, cat);
+
+			if(GetCategorySize(cat, client) < MinCategorySize.IntValue)
+			{
+				prodCategory = -1;
+			}
+		}
+		if (prodCategory != iCategory)
 			continue;
 
 		bool bShouldReturn;
@@ -3013,14 +3054,7 @@ void BuildBuyMenu(int client, int iCategory = -1)
 			sName = alteredProduct.sName;
 		}
 
-		if(SimplifiedEdition.BoolValue)
-		{
-			FormatEx(sDisplay, sizeof(sDisplay), "%s\nChat: !buy %s", sName, sFirstAlias);
-		}
-		else
-		{
-			FormatEx(sDisplay, sizeof(sDisplay), "%s", sName);
-		}
+		FormatEx(sDisplay, sizeof(sDisplay), "%s\nChat: !buy %s", sName, sFirstAlias);
 
 		AddMenuItem(hMenu, sInfo, sDisplay);
 		bAnyItems = true;
@@ -4127,4 +4161,54 @@ stock bool HandleBuyBind(int client, const char[] sAlias)
 	}
 
 	return false;
+}
+
+stock int GetCategorySize(enCategory cat, int buyer)
+{
+	int size = 0;
+
+	int iProductsSize = g_aProducts.Length;
+	int iCategoriesSize = g_aCategories.Length;
+
+	int iCategory = FindCategoryByIdentifier(cat.sID);
+
+	for (int i = 0;i < iCategoriesSize; i++)
+	{
+		enCategory iCat;
+		GetArrayArray(g_aCategories, i, iCat);
+
+		if (iCat.iCategory != iCategory || StrEqual(iCat.sID, cat.sID))
+			continue;
+
+		size += GetCategorySize(iCat, buyer);
+	}
+
+	for (int i = 0; i < iProductsSize; i++)
+	{
+		enProduct product;
+		GetArrayArray(g_aProducts, i, product);
+
+		char sAlias[32];
+		BreakString(product.sAliases, sAlias, sizeof(sAlias));
+
+		if (product.iCategory != iCategory)
+			continue;
+
+		if(!PSAPI_CanProductBeBought(sAlias, buyer, -1 * buyer))
+			continue;
+
+		size++;
+	}
+
+	enProduct impostorProduct;
+
+	impostorProduct.iBuyFlags = cat.iBuyFlags;
+
+	bool bShouldReturn;
+
+	// Category is unavailable, but maybe has available products.
+	if (PSAPI_GetErrorFromBuyflags(buyer, "", impostorProduct, _, _, _, bShouldReturn) && bShouldReturn)
+		return -99999;
+
+	return size;
 }
