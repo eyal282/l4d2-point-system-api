@@ -6,6 +6,8 @@
 #include <autoexecconfig>
 #include <left4dhooks>
 
+#define MIN_FLOAT   -2147483647.0    // I think -2147483648 is lowest but meh, same thing.
+
 #define PSAPI_NOT_ENOUGH_POINTS "\x04[PS]\x03 Failed! You need \x05%d\x03 more points to buy it! (Σ: \x05%d\x03)"
 
 stock char g_sSINames[][]={"","Smoker","Boomer","Hunter","Spitter","Jockey","Charger"};
@@ -716,4 +718,119 @@ stock bool PSAPI_IsEntityPlayer(int entity)
 		return false;
 
 	return true;
+}
+
+
+// This function is perfect but I need to conduct tests to ensure no bugs occur.
+stock bool UC_GetAimPositionBySize(int client, int target, float outputOrigin[3])
+{
+	float BrokenOrigin[3];
+	float vecMin[3], vecMax[3], eyeOrigin[3], eyeAngles[3], Result[3], FakeOrigin[3], clientOrigin[3];
+
+	GetClientMins(target, vecMin);
+	GetClientMaxs(target, vecMax);
+
+	GetEntPropVector(target, Prop_Data, "m_vecOrigin", BrokenOrigin);
+
+	GetClientEyePosition(client, eyeOrigin);
+	GetClientEyeAngles(client, eyeAngles);
+
+	GetEntPropVector(client, Prop_Data, "m_vecOrigin", clientOrigin);
+
+	TR_TraceRayFilter(eyeOrigin, eyeAngles, MASK_SHOT, RayType_Infinite, TraceRayDontHitPlayers);
+
+	TR_GetEndPosition(FakeOrigin);
+
+	Result = FakeOrigin;
+
+	if (TR_PointOutsideWorld(Result))
+		return false;
+
+	float fwd[3];
+
+	GetAngleVectors(eyeAngles, fwd, NULL_VECTOR, NULL_VECTOR);
+
+	NegateVector(fwd);
+
+	float clientHeight = eyeOrigin[2] - clientOrigin[2];
+	float OffsetFix    = eyeOrigin[2] - Result[2];
+
+	if (OffsetFix < 0.0)
+		OffsetFix = 0.0;
+
+	else if (OffsetFix > clientHeight + 1.3)
+		OffsetFix = clientHeight + 1.3;
+
+	ScaleVector(fwd, 1.3);
+
+	int Timeout = 0;
+
+	while (IsPlayerStuck(target, Result, (-1 * clientHeight) + OffsetFix))
+	{
+		AddVectors(Result, fwd, Result);
+
+		Timeout++;
+
+		if (Timeout > 8192)
+			return false;
+	}
+
+	Result[2] += (-1 * clientHeight) + OffsetFix;
+
+	outputOrigin = Result;
+
+	return true;
+}
+
+stock bool IsPlayerStuck(int client, const float Origin[3] = NULL_VECTOR, float HeightOffset = 0.0)
+{
+	float vecMin[3], vecMax[3], vecOrigin[3];
+
+	GetClientMins(client, vecMin);
+	GetClientMaxs(client, vecMax);
+
+	if (UC_IsNullVector(Origin))
+	{
+		GetClientAbsOrigin(client, vecOrigin);
+
+		vecOrigin[2] += HeightOffset;
+	}
+	else
+	{
+		vecOrigin = Origin;
+
+		vecOrigin[2] += HeightOffset;
+	}
+
+	TR_TraceHullFilter(vecOrigin, vecOrigin, vecMin, vecMax, MASK_PLAYERSOLID, TraceRayDontHitPlayers);
+	return TR_DidHit();
+}
+
+stock void TeleportToGround(int client)
+{
+	float vecMin[3], vecMax[3], vecOrigin[3], vecFakeOrigin[3];
+
+	GetClientMins(client, vecMin);
+	GetClientMaxs(client, vecMax);
+
+	GetClientAbsOrigin(client, vecOrigin);
+	vecFakeOrigin = vecOrigin;
+
+	vecFakeOrigin[2] = MIN_FLOAT;
+
+	TR_TraceHullFilter(vecOrigin, vecFakeOrigin, vecMin, vecMax, MASK_PLAYERSOLID, TraceRayDontHitPlayers);
+
+	TR_GetEndPosition(vecOrigin);
+
+	TeleportEntity(client, vecOrigin, NULL_VECTOR, NULL_VECTOR);
+}
+
+public bool TraceRayDontHitPlayers(int entityhit, int mask)
+{
+	return (entityhit > MaxClients || entityhit == 0);
+}
+
+stock bool UC_IsNullVector(const float Vector[3])
+{
+	return (Vector[0] == NULL_VECTOR[0] && Vector[0] == NULL_VECTOR[1] && Vector[2] == NULL_VECTOR[2]);
 }

@@ -427,6 +427,11 @@ public Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sIn
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
+	bool bFoundTeleport = false;
+	float fOrigin[3];
+
+	bFoundTeleport = UC_GetAimPositionBySize(buyer, GetRandomSurvivor(1), fOrigin);
+
 	if (strncmp(sInfo, "Special Infected Spawn - ", 25) == 0)
 	{
 		char sClassname[64];
@@ -441,32 +446,35 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 		if (ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 1", "") == -1)
 			ReplaceStringEx(sClassname, sizeof(sClassname), "Special Infected Spawn - 0", "");
 
-		if(DisableGhostSpawn.BoolValue)
-		{
-			PSAPI_ExecuteCheatCommand(target, "z_spawn %s auto", sClassname);
-			return Plugin_Continue;
-		}
-		PSAPI_SpawnInfectedBossByClassname(target, sClassname, true, bNoPick);
+		PSAPI_SpawnInfectedBossByClassname(target, sClassname, !DisableGhostSpawn.BoolValue, bNoPick);
+		
+		if(bFoundTeleport)
+			TeleportEntity(target, fOrigin, NULL_VECTOR, NULL_VECTOR);
 
 		return Plugin_Continue;
 	}
 	else if (StrEqual(sInfo, "Special Infected Ghost Spawn", false))
 	{
 		PSAPI_SpawnInfectedBossByClassname(target, g_sSIClassnames[GetRandomInt(0, sizeof(g_sSIClassnames) - 1)], true, false);
+
+		if(bFoundTeleport)
+			TeleportEntity(target, fOrigin, NULL_VECTOR, NULL_VECTOR);
 	}
 	else if (StrEqual(sInfo, "Witch"))
 	{
-		if (L4D2_GetWitchCount() < GetConVarInt(WitchLimit))
-		{
-			PSAPI_ExecuteCheatCommand(target, "z_spawn witch auto");
-		}
-		else
+		if(!bFoundTeleport)
 		{
 			return Plugin_Handled;
-			//g_aWitchQueue.PushArray()
-
-			//UC_PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
 		}
+
+		g_aWitchQueue.PushArray(fOrigin);
+
+		if (L4D2_GetWitchCount() >= GetConVarInt(WitchLimit))
+		{
+			UC_PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
+		}
+
+		CreateTimer(0.0, Timer_CheckWitchCount, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	else if (StrEqual(sInfo, "Terror All Witches Attack"))
 	{
