@@ -254,19 +254,19 @@ forward Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] info, 
 // Stocks
 
 
-char Colors[][] = 
+char PS_Colors[][] = 
 {
 	"{NORMAL}", "{RED}", "{GREEN}", "{LIGHTGREEN}", "{OLIVE}", "{LIGHTRED}", "{GRAY}", "{YELLOW}", "{ORANGE}", "{BLUE}", "{PINK}"
 };
 
-char ColorEquivalents[][] =
+char PS_ColorEquivalents[][] =
 {
 	"\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x08", "\x09", "\x10", "\x0C", "\x0E"
 };
 
 
 
-stock void UC_ReplyToCommand(int client, const char[] format, any ...)
+stock void PS_ReplyToCommand(int client, const char[] format, any ...)
 {
 	SetGlobalTransTarget(client);
 	char buffer[256];
@@ -281,9 +281,9 @@ stock void UC_ReplyToCommand(int client, const char[] format, any ...)
 	
 	ReplaceStringEx(buffer, sizeof(buffer), sReplaceFrom, sReplaceTo);
 
-	for(int i=0;i < sizeof(Colors);i++)
+	for(int i=0;i < sizeof(PS_Colors);i++)
 	{
-		ReplaceString(buffer, sizeof(buffer), Colors[i], ColorEquivalents[i]);
+		ReplaceString(buffer, sizeof(buffer), PS_Colors[i], PS_ColorEquivalents[i]);
 	}
 	
 	ReplaceString(buffer, sizeof(buffer), "{PERCENT}", "%%");
@@ -291,13 +291,13 @@ stock void UC_ReplyToCommand(int client, const char[] format, any ...)
 	ReplyToCommand(client, buffer);
 }
 
-stock void UC_PrintToChat(int client, const char[] format, any ...)
+stock void PS_PrintToChat(int client, const char[] format, any ...)
 {
 	ConVar prefixCvar = FindConVar("l4d2_points_prefix");
 	
 	if(prefixCvar == null)
 	{
-		prefixCvar = UC_CreateConVar("l4d2_points_prefix", "{LIGHTGREEN}[PS] {GREEN}");
+		prefixCvar = PS_CreateConVar("l4d2_points_prefix", "{LIGHTGREEN}[PS] {GREEN}");
 	}
 
 	SetGlobalTransTarget(client);
@@ -320,9 +320,9 @@ stock void UC_PrintToChat(int client, const char[] format, any ...)
 	
 	ReplaceStringEx(buffer, sizeof(buffer), sReplaceFrom, sReplaceTo);
 
-	for(int i=0;i < sizeof(Colors);i++)
+	for(int i=0;i < sizeof(PS_Colors);i++)
 	{
-		ReplaceString(buffer, sizeof(buffer), Colors[i], ColorEquivalents[i]);
+		ReplaceString(buffer, sizeof(buffer), PS_Colors[i], PS_ColorEquivalents[i]);
 	}
 	
 	ReplaceString(buffer, sizeof(buffer), "{PERCENT}", "%%");
@@ -339,7 +339,7 @@ stock void UC_PrintToChat(int client, const char[] format, any ...)
 	PrintToChat(client, buffer);
 }
 
-stock void UC_PrintToChatAll(const char[] format, any ...)
+stock void PS_PrintToChatAll(const char[] format, any ...)
 {	
 	char buffer[256];
 	for(int i=1;i <= MaxClients;i++)
@@ -350,18 +350,18 @@ stock void UC_PrintToChatAll(const char[] format, any ...)
 		SetGlobalTransTarget(i);
 		VFormat(buffer, sizeof(buffer), format, 2);
 		
-		UC_PrintToChat(i, buffer);
+		PS_PrintToChat(i, buffer);
 	}
 }
 
-stock void UC_StringToUpper(char[] buffer)
+stock void PS_StringToUpper(char[] buffer)
 {
 	int length = strlen(buffer);
 	for(int i=0;i < length;i++)
 		buffer[i] = CharToUpper(buffer[i]);
 }
 
-stock void UC_PrintToChatEyal(const char[] format, any...)
+stock void PS_PrintToChatEyal(const char[] format, any...)
 {
 	char buffer[291];
 	VFormat(buffer, sizeof(buffer), format, 2);
@@ -377,11 +377,11 @@ stock void UC_PrintToChatEyal(const char[] format, any...)
 		GetClientAuthId(i, AuthId_Steam2, steamid, sizeof(steamid));
 
 		if (StrEqual(steamid, "STEAM_1:0:49508144"))
-			UC_PrintToChat(i, buffer);
+			PS_PrintToChat(i, buffer);
 	}
 }
 
-stock ConVar UC_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
+stock ConVar PS_CreateConVar(const char[] name, const char[] defaultValue, const char[] description = "", int flags = 0, bool hasMin = false, float min = 0.0, bool hasMax = false, float max = 0.0)
 {
 	ConVar hndl = AutoExecConfig_CreateConVar(name, defaultValue, description, flags, hasMin, min, hasMax, max);
 
@@ -722,7 +722,7 @@ stock bool PSAPI_IsEntityPlayer(int entity)
 
 
 // This function is perfect but I need to conduct tests to ensure no bugs occur.
-stock bool UC_GetAimPositionBySize(int client, int target, float outputOrigin[3])
+stock bool PS_GetAimPositionBySize(int client, int target, float outputOrigin[3])
 {
 	float BrokenOrigin[3];
 	float vecMin[3], vecMax[3], eyeOrigin[3], eyeAngles[3], Result[3], FakeOrigin[3], clientOrigin[3];
@@ -737,7 +737,7 @@ stock bool UC_GetAimPositionBySize(int client, int target, float outputOrigin[3]
 
 	GetEntPropVector(client, Prop_Data, "m_vecOrigin", clientOrigin);
 
-	TR_TraceRayFilter(eyeOrigin, eyeAngles, MASK_SHOT, RayType_Infinite, TraceRayDontHitPlayers);
+	TR_TraceRayFilter(eyeOrigin, eyeAngles, MASK_SHOT, RayType_Infinite, PS_TraceRayDontHitPlayers);
 
 	TR_GetEndPosition(FakeOrigin);
 
@@ -789,7 +789,7 @@ stock bool IsPlayerStuck(int client, const float Origin[3] = NULL_VECTOR, float 
 	GetClientMins(client, vecMin);
 	GetClientMaxs(client, vecMax);
 
-	if (UC_IsNullVector(Origin))
+	if (PS_IsNullVector(Origin))
 	{
 		GetClientAbsOrigin(client, vecOrigin);
 
@@ -802,7 +802,7 @@ stock bool IsPlayerStuck(int client, const float Origin[3] = NULL_VECTOR, float 
 		vecOrigin[2] += HeightOffset;
 	}
 
-	TR_TraceHullFilter(vecOrigin, vecOrigin, vecMin, vecMax, MASK_PLAYERSOLID, TraceRayDontHitPlayers);
+	TR_TraceHullFilter(vecOrigin, vecOrigin, vecMin, vecMax, MASK_PLAYERSOLID, PS_TraceRayDontHitPlayers);
 	return TR_DidHit();
 }
 
@@ -818,19 +818,19 @@ stock void TeleportToGround(int client)
 
 	vecFakeOrigin[2] = MIN_FLOAT;
 
-	TR_TraceHullFilter(vecOrigin, vecFakeOrigin, vecMin, vecMax, MASK_PLAYERSOLID, TraceRayDontHitPlayers);
+	TR_TraceHullFilter(vecOrigin, vecFakeOrigin, vecMin, vecMax, MASK_PLAYERSOLID, PS_TraceRayDontHitPlayers);
 
 	TR_GetEndPosition(vecOrigin);
 
 	TeleportEntity(client, vecOrigin, NULL_VECTOR, NULL_VECTOR);
 }
 
-public bool TraceRayDontHitPlayers(int entityhit, int mask)
+public bool PS_TraceRayDontHitPlayers(int entityhit, int mask)
 {
 	return (entityhit > MaxClients || entityhit == 0);
 }
 
-stock bool UC_IsNullVector(const float Vector[3])
+stock bool PS_IsNullVector(const float Vector[3])
 {
 	return (Vector[0] == NULL_VECTOR[0] && Vector[0] == NULL_VECTOR[1] && Vector[2] == NULL_VECTOR[2]);
 }

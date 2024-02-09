@@ -430,7 +430,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 	bool bFoundTeleport = false;
 	float fOrigin[3];
 
-	bFoundTeleport = UC_GetAimPositionBySize(buyer, GetRandomSurvivor(1), fOrigin);
+	bFoundTeleport = PS_GetAimPositionBySize(buyer, GetRandomSurvivor(1), fOrigin);
 
 	if (strncmp(sInfo, "Special Infected Spawn - ", 25) == 0)
 	{
@@ -471,7 +471,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 
 		if (L4D2_GetWitchCount() >= GetConVarInt(WitchLimit))
 		{
-			UC_PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
+			PS_PrintToChat(buyer, "Witch limit exceeded, but your witch will spawn after a witch dies.");
 		}
 
 		CreateTimer(0.0, Timer_CheckWitchCount, _, TIMER_FLAG_NO_MAPCHANGE);
@@ -516,7 +516,7 @@ public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, 
 				else if (GetClientTeam(i) != view_as<int>(L4DTeam_Infected))
 					continue;
 
-				UC_PrintToChat(i, "%N\x01 invested \x05%d\x03 points to Permanent Uncommon Mob! (\x05%d\x01 / \x05%d \x03)", buyer, RoundToFloor(fCost), RoundToFloor(g_fPermanentUmobInvested), GetConVarInt(PointsPermanentUmob));
+				PS_PrintToChat(i, "%N\x01 invested \x05%d\x03 points to Permanent Uncommon Mob! (\x05%d\x01 / \x05%d \x03)", buyer, RoundToFloor(fCost), RoundToFloor(g_fPermanentUmobInvested), GetConVarInt(PointsPermanentUmob));
 			}
 
 			if(g_fPermanentUmobInvested >= GetConVarFloat(PointsPermanentUmob))
