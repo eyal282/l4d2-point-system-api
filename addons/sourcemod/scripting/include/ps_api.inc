@@ -8,7 +8,7 @@
 
 #define MIN_FLOAT   -2147483647.0    // I think -2147483648 is lowest but meh, same thing.
 
-#define PSAPI_NOT_ENOUGH_POINTS "\x04[PS]\x03 Failed! You need \x05%d\x03 more points to buy it! (Σ: \x05%d\x03)"
+#define PSAPI_NOT_ENOUGH_POINTS "Failed! You need \x05%d\x03 more points to buy it! (Σ: \x05%d\x03)"
 
 stock char g_sSINames[][]={"","Smoker","Boomer","Hunter","Spitter","Jockey","Charger"};
 stock char g_sSIClassnames[][]={"","smoker","boomer","hunter","spitter","jockey","charger"};
@@ -333,7 +333,7 @@ stock void UC_PrintToChat(int client, const char[] format, any ...)
 
 	if(pos != -1 && Simplified != null && Simplified.BoolValue)
 	{
-		buffer[pos - 3] = EOS;
+		buffer[pos - 2] = EOS;
 	}
 	
 	PrintToChat(client, buffer);

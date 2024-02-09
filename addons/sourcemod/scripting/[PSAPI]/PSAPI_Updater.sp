@@ -21,6 +21,13 @@ public Plugin myinfo =
 
 Handle g_Timer;
 
+public void OnLibraryAdded()
+{
+	if (LibraryExists("updater"))
+	{
+		Updater_AddPlugin(UPDATE_URL);
+	}
+}
 public void OnMapStart()
 {
 	g_Timer = INVALID_HANDLE;
@@ -63,7 +70,7 @@ public void Func_OnAllPluginsLoaded()
 			Updater_AddPlugin(UPDATE_URL);
 		}
 		else
-		{
+		{		
 			return;
 		}
 
