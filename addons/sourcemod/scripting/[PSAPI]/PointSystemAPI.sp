@@ -3643,6 +3643,9 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 
 		product.fNextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fDelay + alteredProduct.fCooldown;
 
+		// To save cooldown.
+		g_aProducts.SetArray(productPos, product);
+
 		enDelayedProduct dProduct;
 
 		dProduct.timer        = hTimer;
