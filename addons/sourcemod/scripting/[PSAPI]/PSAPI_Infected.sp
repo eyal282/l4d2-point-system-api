@@ -34,6 +34,7 @@ ConVar PointsJmob;
 ConVar PointsPermanentUmob;
 ConVar PointsTerrorPerWitch;
 ConVar WitchLimit;
+ConVar WitchDistanceLimit;
 ConVar TankLimit;
 
 char g_sUncommonModels[][] = {
@@ -83,7 +84,8 @@ public void OnPluginStart()
 	PointsPermanentUmob     = AutoExecConfig_CreateConVar("l4d2_points_permanent_umob", "-1", "How many points does a permanent uncommon mob cost");
 	PointsTerrorPerWitch    = AutoExecConfig_CreateConVar("l4d2_points_terror_per_witch", "10", "How many points does a terror cost per witch");
 	WitchLimit              = AutoExecConfig_CreateConVar("l4d2_points_witch_limiter", "10", "Maximum amount of alive witches");
-	TankLimit              = AutoExecConfig_CreateConVar("l4d2_points_tank_limiter", "1", "Maximum amount of alive tanks");
+	WitchDistanceLimit      = AutoExecConfig_CreateConVar("l4d2_points_witch_min_distance_from_saferoom", "768", "A witch closer than this much to the safe room cannot spawn");
+	TankLimit               = AutoExecConfig_CreateConVar("l4d2_points_tank_limiter", "1", "Maximum amount of alive tanks");
 
 	HookEvent("round_start", Event_RoundStart, EventHookMode_Post);
 
@@ -372,6 +374,46 @@ public Action PointSystemAPI_OnTryBuyProduct(int buyer, const char[] sInfo, cons
 	{
 		PSAPI_RefundProducts("boomer spitter smoker hunter charger jockey ghost", buyer, target);
 	}
+	if (StrEqual(sInfo, "Witch"))
+	{
+		float fOrigin[3];
+
+		bool bFoundTeleport = PS_GetAimPositionBySize(buyer, GetRandomSurvivor(1), fOrigin);
+
+		if(!bFoundTeleport)
+		{
+			PSAPI_SetErrorByPriority(50, "Could not find a valid position at your aim.");
+			return Plugin_Handled;
+		}
+
+		float fStartSafeOrigin[3], fEndSafeOrigin[3];
+
+		int startDoor, endDoor;
+
+		startDoor = L4D_GetCheckpointFirst();
+		endDoor = L4D_GetCheckpointLast();
+
+		if(startDoor != -1)
+		{
+			GetEntPropVector(startDoor, Prop_Data, "m_vecAbsOrigin", fStartSafeOrigin);
+
+			if(GetVectorDistance(fOrigin, fStartSafeOrigin, false) < WitchDistanceLimit.FloatValue)
+			{
+				PSAPI_SetErrorByPriority(50, "Spawn point too close to start safe room (Distance left: %.1f units)", WitchDistanceLimit.FloatValue - GetVectorDistance(fOrigin, fStartSafeOrigin, false));
+				return Plugin_Handled;
+			}
+		}
+		if(endDoor != -1)
+		{
+			GetEntPropVector(endDoor, Prop_Data, "m_vecAbsOrigin", fEndSafeOrigin);
+
+			if(GetVectorDistance(fOrigin, fEndSafeOrigin, false) < WitchDistanceLimit.FloatValue)
+			{
+				PSAPI_SetErrorByPriority(50, "Spawn point too close to end safe room (Distance left: %.1f units)", WitchDistanceLimit.FloatValue - GetVectorDistance(fOrigin, fEndSafeOrigin, false));
+				return Plugin_Handled;
+			}
+		}
+	}
 	return Plugin_Continue;
 }
 
@@ -420,17 +462,52 @@ public Action PointSystemAPI_OnRealTimeRefundProduct(int buyer, const char[] sIn
 			return Plugin_Handled;
 		}
 	}
+	if (StrEqual(sInfo, "Witch"))
+	{
+		float fOrigin[3];
 
+		bool bFoundTeleport = PS_GetAimPositionBySize(buyer, GetRandomSurvivor(1), fOrigin);
+
+		if(!bFoundTeleport)
+		{
+			return Plugin_Handled;
+		}
+
+		float fStartSafeOrigin[3], fEndSafeOrigin[3];
+
+		int startDoor, endDoor;
+
+		startDoor = L4D_GetCheckpointFirst();
+		endDoor = L4D_GetCheckpointLast();
+
+		if(startDoor != -1)
+		{
+			GetEntPropVector(startDoor, Prop_Data, "m_vecAbsOrigin", fStartSafeOrigin);
+
+			if(GetVectorDistance(fOrigin, fStartSafeOrigin, false) < WitchDistanceLimit.FloatValue)
+			{
+				return Plugin_Handled;
+			}
+		}
+		if(endDoor != -1)
+		{
+			GetEntPropVector(endDoor, Prop_Data, "m_vecAbsOrigin", fEndSafeOrigin);
+
+			if(GetVectorDistance(fOrigin, fEndSafeOrigin, false) < WitchDistanceLimit.FloatValue)
+			{
+				return Plugin_Handled;
+			}
+		}
+	}
 	return Plugin_Continue;
 }
 // This forward should be used to give the product to a target player. This is after the delay, and after not refunding the product. Called instantly after PointSystemAPI_OnBuyProductPost
 // sAliases contain the original alias list, to compare your own alias as an identifier.
 public Action PointSystemAPI_OnShouldGiveProduct(int buyer, const char[] sInfo, const char[] sAliases, const char[] sName, int target, float fCost, float fDelay, float fCooldown)
 {
-	bool bFoundTeleport = false;
 	float fOrigin[3];
 
-	bFoundTeleport = PS_GetAimPositionBySize(buyer, GetRandomSurvivor(1), fOrigin);
+	bool bFoundTeleport = PS_GetAimPositionBySize(buyer, GetRandomSurvivor(1), fOrigin);
 
 	if (strncmp(sInfo, "Special Infected Spawn - ", 25) == 0)
 	{
@@ -582,7 +659,7 @@ public void CreateInfectedProducts()
 	                    BUYFLAG_INFECTED | BUYFLAG_DEAD | BUYFLAG_REALTIME_REFUNDS);
 
 	PSAPI_CreateProduct(-1, GetConVarFloat(PointsWitch), "Witch", "Spawns a witch", "witch", "Witch", 0.0, 5.0,
-	                    BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES);
+	                    BUYFLAG_INFECTED | BUYFLAG_ALL_LIFESTATES | BUYFLAG_REALTIME_REFUNDS);
 
 	FormatEx(sInfo, sizeof(sInfo), "Forces all witches to attack random players\nCosts %.0f points multiplied by the number of witches", GetConVarFloat(PointsTerrorPerWitch));
 
