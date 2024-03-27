@@ -659,7 +659,6 @@ public any Native_CanProductBeBought(Handle plugin, int numParams)
 
 	int client       = GetNativeCell(2);
 	int targetclient = GetNativeCell(3);
-	GetNativeCell(4);
 
 	bool bIgnorePrice = false;
 
@@ -3563,8 +3562,6 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 
 		g_fPoints[client] -= alteredProduct.fCost;
 
-		SetArrayArray(g_aProducts, productPos, product);
-
 		Handle   hTimer;
 		DataPack DP;
 
@@ -3644,7 +3641,7 @@ stock void PerformPurchaseOnAlias(int client, char[] sFirstArg, char[] sSecondAr
 		product.fNextBuyProduct[targetclient] = GetGameTime() + alteredProduct.fDelay + alteredProduct.fCooldown;
 
 		// To save cooldown.
-		g_aProducts.SetArray(productPos, product);
+		SetArrayArray(g_aProducts, productPos, product);
 
 		enDelayedProduct dProduct;
 
