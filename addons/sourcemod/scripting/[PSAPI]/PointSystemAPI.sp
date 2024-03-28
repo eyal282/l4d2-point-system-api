@@ -303,18 +303,21 @@ public void OnConfigsExecuted()
 	AddServerTag2("psapi");
 	AddServerTag2("!buy");
 
-	if(TeamBuy.BoolValue && !CommandExists("sm_sp"))
+	if(TeamBuy.BoolValue)
 	{
-		RegConsoleCmd("sm_blist", Command_BuyList);
-		RegConsoleCmd("sm_buylist", Command_BuyList);
-		RegConsoleCmd("sm_send", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
-		RegConsoleCmd("sm_sendpoints", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
-		RegConsoleCmd("sm_sp", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
-		RegConsoleCmd("sm_splist", Command_SendPointsList, "sm_sendpointslist [amount/all]");
-
-		if(RequestPoints.BoolValue)
+		if(RequestPoints.BoolValue && !CommandExists("sm_rp"))
 		{
 			RegConsoleCmd("sm_rp", Command_RequestPoints);
+		}
+
+		if(!CommandExists("sm_sp"))
+		{
+			RegConsoleCmd("sm_blist", Command_BuyList);
+			RegConsoleCmd("sm_buylist", Command_BuyList);
+			RegConsoleCmd("sm_send", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
+			RegConsoleCmd("sm_sendpoints", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
+			RegConsoleCmd("sm_sp", Command_SendPoints, "sm_sendpoints <target> [amount/all]");
+			RegConsoleCmd("sm_splist", Command_SendPointsList, "sm_sendpointslist [amount/all]");
 		}
 	}
 }
