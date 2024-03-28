@@ -303,7 +303,7 @@ public void OnConfigsExecuted()
 	AddServerTag2("psapi");
 	AddServerTag2("!buy");
 
-	if(TeamBuy.BoolValue)
+	if(TeamBuy.BoolValue && !CommandExists("sm_sp"))
 	{
 		RegConsoleCmd("sm_blist", Command_BuyList);
 		RegConsoleCmd("sm_buylist", Command_BuyList);
