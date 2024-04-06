@@ -1019,6 +1019,12 @@ stock void CheckGiveStartPoints(int client, bool bRoundStart = false)
 	if(g_aStartPointAuthIds.FindString(authId) != -1)
 		return;
 
+	if(bRoundStart)
+	{
+		g_fSavedSurvivorPoints[client] = 0.0;
+		g_fSavedInfectedPoints[client] = 0.0;
+	}
+
 	float fAverageSurvivorsPrice = PSAPI_GetAverageProductPrice(L4DTeam_Survivor);
 	float fAverageInfectedPrice = PSAPI_GetAverageProductPrice(L4DTeam_Infected);
 
