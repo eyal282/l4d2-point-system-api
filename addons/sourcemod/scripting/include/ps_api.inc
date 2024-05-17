@@ -606,7 +606,7 @@ stock bool PSAPI_GetErrorFromBuyflags(int buyer, char[] sFirstArg, enProduct alt
 	
 	else if(alteredProduct.fNextBuyProduct[target] > GetGameTime())
 	{
-		FormatEx(sError, iLength, "\x04[PS]\x04 %s\x03 is in %.2fsec cooldown for %s", alteredProduct.sName, alteredProduct.fNextBuyProduct[target] - GetGameTime(), target == buyer ? "You" : sName);
+		FormatEx(sError, iLength, "%s\x03 is in %.2fsec cooldown for %s", alteredProduct.sName, alteredProduct.fNextBuyProduct[target] - GetGameTime(), target == buyer ? "You" : sName);
 		return true;
 	}
 	
