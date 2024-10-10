@@ -2257,6 +2257,11 @@ public Action Command_Incap(int client, int args)
 		{
 			int iDmgEntity = CreateEntityByName("point_hurt");
 			SetEntityHealth(target, 1);
+
+			if(GetClientTeam(target) == 2)
+			{
+				L4D_SetPlayerTempHealth(target, 0);
+			}
 			DispatchKeyValue(target, "targetname", "bm_target");
 			DispatchKeyValue(iDmgEntity, "DamageTarget", "bm_target");
 			DispatchKeyValue(iDmgEntity, "Damage", "100");
@@ -3360,19 +3365,16 @@ stock void ExecuteFullHeal(int client)
 		}
 		else if (bIncap)
 		{
-			FullyHealPlayer(client);
+			L4D2_VScriptWrapper_ReviveFromIncap(client);
 
-			if (L4D_IsPlayerIncapacitated(client))
-				L4D2_VScriptWrapper_ReviveFromIncap(client);
+			ResetReviveCount(client);
 
 			SetEntityHealthToMax(client);
 		}
 		else
 		{
-			FullyHealPlayer(client);
-
-			if (L4D_IsPlayerIncapacitated(client))
-				L4D2_VScriptWrapper_ReviveFromIncap(client);
+			
+			ResetReviveCount(client);
 
 			SetEntityHealthToMax(client);
 		}
@@ -3390,14 +3392,11 @@ stock void SetEntityHealthToMax(int entity)
 	SetEntityHealth(entity, GetEntProp(entity, Prop_Send, "m_iMaxHealth"));
 }
 
-stock void FullyHealPlayer(int client)
+stock void ResetReviveCount(int client)
 {
 	char code[512];
-
-	FormatEx(code, sizeof(code), "ret <- GetPlayerFromUserID(%d).GiveItem(\"health\"); <RETURN>ret</RETURN>", GetClientUserId(client));
-
-	char sOutput[512];
-	L4D2_GetVScriptOutput(code, sOutput, sizeof(sOutput));
+	FormatEx(code, sizeof(code), "GetPlayerFromUserID(%i).SetReviveCount(0)", GetClientUserId(client));
+	L4D2_ExecVScriptCode(code);
 }
 stock int LookupProductByAlias(char[] sAlias, enProduct finalProduct)
 {
